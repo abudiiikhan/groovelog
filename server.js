@@ -127,7 +127,9 @@ async function getCoverArt(mbid) {
     if (!res.ok) return null;
     const data = await res.json();
     const front = data.images?.find(i => i.front) || data.images?.[0];
-    return front?.thumbnails?.['500'] || front?.thumbnails?.large || front?.image || null;
+    const url = front?.thumbnails?.['500'] || front?.thumbnails?.large || front?.image || null;
+    // Always return https:// — Cover Art Archive returns http:// which browsers block
+    return url ? url.replace('http://', 'https://') : null;
   } catch { return null; }
 }
 
