@@ -1,0 +1,4 @@
+node_modules/
+groovelog.db
+.DS_Store
+package-lock.json
