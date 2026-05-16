@@ -1,0 +1,1804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Groovelog</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:-apple-system,'Helvetica Neue',Arial,sans-serif}
+input[type=range]{width:100%;accent-color:#ff3cac;cursor:pointer}
+textarea,input[type=text]{resize:none;font-family:inherit}
+::-webkit-scrollbar{width:0;background:transparent}
+input::placeholder,textarea::placeholder{color:#444}
+@media(max-width:420px){.phone-shell{width:100vw!important;height:100vh!important;border-radius:0!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useRef,useEffect} = React;
+
+/* Theme tokens — swap between DARK and LIGHT */
+const DARK_THEME = {
+  bg:"#0d0d0d",card:"#161616",mid:"#1e1e1e",dark:"#0a0a0a",
+  border:"#222222",inputBg:"#1e1e1e",inputBorder:"#333",
+  text:{"primary":"#ffffff","secondary":"#aaaaaa","muted":"#555555","faint":"#333333"},
+  pink:"#ff3cac",pdark:"#2a0018",psoft:"#1a0010",
+  white:"#ffffff",lgray:"#aaaaaa",gray:"#555555",dgray:"#333333",
+  purple:"#7F77DD",teal:"#1D9E75",coral:"#D85A30",
+  blue:"#378ADD",amber:"#BA7517",rose:"#D4537E",
+  violet:"#533ab7",green:"#0f6e56",indigo:"#784aff",
+};
+const LIGHT_THEME = {
+  bg:"#f5f5f7",card:"#ffffff",mid:"#ebebeb",dark:"#e0e0e0",
+  border:"#dddddd",inputBg:"#ebebeb",inputBorder:"#cccccc",
+  text:{"primary":"#0d0d0d","secondary":"#555555","muted":"#888888","faint":"#cccccc"},
+  pink:"#ff3cac",pdark:"#fce4f3",psoft:"#fce4f3",
+  white:"#0d0d0d",lgray:"#555555",gray:"#888888",dgray:"#bbbbbb",
+  purple:"#5a4fd4",teal:"#158a63",coral:"#c44a22",
+  blue:"#1a6db5",amber:"#9a5f0e",rose:"#b5345e",
+  violet:"#3d2a9e",green:"#0a5a42",indigo:"#5c2eb0",
+};
+/* C is the live theme — updated by setTheme */
+let C = {...DARK_THEME};
+
+/* ─── DATA ─── 🔌 Replace with API calls */
+const GENRES = ["All","R&B","Hip-Hop","Indie","Electronic","Alt-Rock","Jazz","Soul","Pop"];
+
+/* Albums — no hardcoded MBIDs (they were fake and caused 404s).
+   The app resolves real MBIDs from MusicBrainz via /api/resolve on demand. */
+const INIT_ALBUMS = [
+  {id:"blonde",       title:"Blonde",                     artist:"Frank Ocean",        year:2016, tracks:17, genre:"R&B",       color:C.purple,  avg:9.1, myScore:9.4,  myReview:"still the most emotionally complex album of the decade.", ratings:14203, trending:true},
+  {id:"ctrl",         title:"CTRL",                       artist:"SZA",                year:2017, tracks:14, genre:"R&B",       color:C.coral,   avg:9.1, myScore:7.1,  myReview:"overrated tbh. a few bangers but loses steam.",           ratings:13800},
+  {id:"tpab",         title:"To Pimp a Butterfly",        artist:"Kendrick Lamar",     year:2015, tracks:16, genre:"Hip-Hop",   color:C.amber,   avg:9.6, myScore:10.0, myReview:"",                                                        ratings:18400, trending:true},
+  {id:"currents",     title:"Currents",                   artist:"Tame Impala",        year:2015, tracks:13, genre:"Indie",     color:C.teal,    avg:8.4, myScore:8.7,  myReview:"",                                                        ratings:11200, trending:true},
+  {id:"lemonade",     title:"Lemonade",                   artist:"Beyoncé",            year:2016, tracks:12, genre:"R&B",       color:C.rose,    avg:9.2, myScore:null, myReview:"",                                                        ratings:12100},
+  {id:"ch-orange",    title:"channel ORANGE",             artist:"Frank Ocean",        year:2012, tracks:17, genre:"R&B",       color:"#c26ba1", avg:9.0, myScore:null, myReview:"",                                                        ratings:10500},
+  {id:"in-rainbows",  title:"In Rainbows",                artist:"Radiohead",          year:2007, tracks:10, genre:"Alt-Rock",  color:C.blue,    avg:9.3, myScore:null, myReview:"",                                                        ratings:9800},
+  {id:"care-for-me",  title:"Care for Me",                artist:"Saba",               year:2018, tracks:12, genre:"Hip-Hop",  color:"#1a7a5e", avg:9.1, myScore:null, myReview:"",                                                        ratings:5200},
+  {id:"gkmc",         title:"good kid, m.A.A.d city",    artist:"Kendrick Lamar",     year:2012, tracks:13, genre:"Hip-Hop",   color:"#8a3060", avg:9.4, myScore:null, myReview:"",                                                        ratings:15600},
+  {id:"nfr",          title:"Norman Fucking Rockwell!",   artist:"Lana Del Rey",       year:2019, tracks:14, genre:"Indie",     color:"#5a4080", avg:8.7, myScore:null, myReview:"",                                                        ratings:8900},
+  {id:"miseducation", title:"The Miseducation of Lauryn Hill", artist:"Lauryn Hill",  year:1998, tracks:14, genre:"R&B",       color:"#7a4a1a", avg:9.5, myScore:null, myReview:"",                                                        ratings:16200},
+  {id:"ok-computer",  title:"OK Computer",                artist:"Radiohead",          year:1997, tracks:12, genre:"Alt-Rock",  color:"#2a5a7a", avg:9.4, myScore:null, myReview:"",                                                        ratings:17800},
+  {id:"ram",          title:"Random Access Memories",     artist:"Daft Punk",          year:2013, tracks:13, genre:"Electronic",color:"#8a6a1a", avg:8.9, myScore:null, myReview:"",                                                        ratings:13400},
+  {id:"kind-of-blue", title:"Kind of Blue",               artist:"Miles Davis",        year:1959, tracks:5,  genre:"Jazz",      color:"#1a4a6a", avg:9.7, myScore:null, myReview:"",                                                        ratings:8700},
+  {id:"rumours",      title:"Rumours",                    artist:"Fleetwood Mac",      year:1977, tracks:11, genre:"Indie",     color:"#6a1a4a", avg:9.3, myScore:null, myReview:"",                                                        ratings:14200},
+  {id:"igor",         title:"IGOR",                       artist:"Tyler, the Creator", year:2019, tracks:12, genre:"Hip-Hop",   color:"#3a6a3a", avg:8.8, myScore:null, myReview:"",                                                        ratings:11800},
+  {id:"after-hours",  title:"After Hours",                artist:"The Weeknd",         year:2020, tracks:14, genre:"R&B",       color:"#5a1a1a", avg:8.6, myScore:null, myReview:"",                                                        ratings:19200},
+  {id:"folklore",     title:"folklore",                   artist:"Taylor Swift",       year:2020, tracks:16, genre:"Indie",     color:"#4a4a3a", avg:8.9, myScore:null, myReview:"",                                                        ratings:22100},
+  {id:"madvillainy",  title:"Madvillainy",                artist:"Madvillain",         year:2004, tracks:22, genre:"Hip-Hop",   color:"#3a2a5a", avg:9.5, myScore:null, myReview:"",                                                        ratings:9400},
+  {id:"coloring-book",title:"Coloring Book",              artist:"Chance the Rapper",  year:2016, tracks:14, genre:"Hip-Hop",   color:"#5a3a1a", avg:8.7, myScore:null, myReview:"",                                                        ratings:10200},
+  {id:"melodrama",    title:"Melodrama",                  artist:"Lorde",              year:2017, tracks:11, genre:"Pop",       color:"#4a1a6a", avg:9.0, myScore:null, myReview:"",                                                        ratings:11600},
+  {id:"purple-rain",  title:"Purple Rain",                artist:"Prince",             year:1984, tracks:9,  genre:"R&B",       color:"#4a0a6a", avg:9.2, myScore:null, myReview:"",                                                        ratings:12900},
+  {id:"whats-going-on",title:"What's Going On",           artist:"Marvin Gaye",        year:1971, tracks:9,  genre:"Soul",      color:"#1a5a3a", avg:9.6, myScore:null, myReview:"",                                                        ratings:10800},
+  {id:"low-end",      title:"The Low End Theory",         artist:"A Tribe Called Quest",year:1991,tracks:14, genre:"Hip-Hop",  color:"#5a4a1a", avg:9.3, myScore:null, myReview:"",                                                        ratings:9600},
+  {id:"blue",         title:"Blue",                       artist:"Joni Mitchell",      year:1971, tracks:10, genre:"Indie",     color:"#1a3a6a", avg:9.4, myScore:null, myReview:"",                                                        ratings:8100},
+];
+/* Drake Iceman — 2025 release, MBID resolved at runtime */
+const ICEMAN = {id:"iceman-drake-2025", mbid:null, title:"Iceman", artist:"Drake", year:2025, tracks:14, genre:"Hip-Hop", color:"#1a3a5c", avg:7.8, myScore:null, myReview:"", ratings:42100, trending:true, new:true};
+const ALL_ALBUMS = [ICEMAN,...INIT_ALBUMS];
+
+const SONGS_DATA = {
+  "blonde":[
+    {id:1,title:"Nikes",dur:"3:25",avg:7.8,mine:7.5,myReview:"interesting opener"},
+    {id:2,title:"Ivy",dur:"4:10",avg:9.1,mine:9.2,myReview:""},
+    {id:3,title:"Pink + White",dur:"3:04",avg:8.8,mine:9.0,myReview:""},
+    {id:4,title:"Be Yourself",dur:"1:03",avg:6.2,mine:null,myReview:""},
+    {id:5,title:"Solo",dur:"3:42",avg:8.6,mine:8.8,myReview:""},
+    {id:6,title:"Skyline To",dur:"3:11",avg:7.2,mine:null,myReview:""},
+    {id:7,title:"Self Control",dur:"4:09",avg:9.5,mine:9.6,myReview:"one of the best songs ever made"},
+    {id:8,title:"Good Guy",dur:"1:57",avg:5.8,mine:null,myReview:""},
+    {id:9,title:"Nights",dur:"5:07",avg:9.7,mine:9.4,myReview:"the beat switch is everything"},
+    {id:10,title:"Solo (Reprise)",dur:"1:01",avg:7.1,mine:null,myReview:""},
+    {id:11,title:"Pretty Sweet",dur:"3:17",avg:7.8,mine:null,myReview:""},
+    {id:12,title:"White Ferrari",dur:"4:09",avg:9.3,mine:null,myReview:""},
+    {id:13,title:"Seigfried",dur:"5:28",avg:8.9,mine:null,myReview:""},
+    {id:14,title:"Godspeed",dur:"2:43",avg:8.7,mine:null,myReview:""},
+    {id:15,title:"Futura Free",dur:"9:04",avg:8.2,mine:null,myReview:""},
+  ],
+  "iceman-drake-2025":[
+    {id:1,title:"Iceman Intro",dur:"1:52",avg:7.2,mine:null,myReview:""},
+    {id:2,title:"Frozen",dur:"3:41",avg:8.1,mine:null,myReview:""},
+    {id:3,title:"Cold Shoulder",dur:"3:28",avg:7.9,mine:null,myReview:""},
+    {id:4,title:"Winter Games",dur:"4:02",avg:8.4,mine:null,myReview:""},
+    {id:5,title:"Below Zero",dur:"3:15",avg:7.6,mine:null,myReview:""},
+    {id:6,title:"Black Ice",dur:"3:55",avg:8.2,mine:null,myReview:""},
+    {id:7,title:"Permafrost",dur:"4:18",avg:7.8,mine:null,myReview:""},
+    {id:8,title:"Glacier",dur:"3:33",avg:8.0,mine:null,myReview:""},
+    {id:9,title:"Sub-Zero",dur:"3:47",avg:7.5,mine:null,myReview:""},
+    {id:10,title:"Diamond Blizzard",dur:"4:11",avg:8.6,mine:null,myReview:""},
+    {id:11,title:"Ice Cap",dur:"3:22",avg:7.7,mine:null,myReview:""},
+    {id:12,title:"Arctic",dur:"4:05",avg:7.9,mine:null,myReview:""},
+    {id:13,title:"Snowfall",dur:"3:50",avg:8.3,mine:null,myReview:""},
+    {id:14,title:"Frozen Outro",dur:"2:14",avg:7.1,mine:null,myReview:""},
+  ],
+};
+
+const FRIENDS = [
+  {id:1, handle:"@eren",    name:"Eren",    initials:"ER", color:C.violet},
+  {id:2, handle:"@naman",   name:"Naman",   initials:"NA", color:C.green},
+  {id:3, handle:"@ahmed",   name:"Ahmed",   initials:"AH", color:C.amber},
+  {id:4, handle:"@zawwar",  name:"Zawwar",  initials:"ZW", color:C.blue},
+  {id:5, handle:"@sarah",   name:"Sarah",   initials:"SA", color:C.rose},
+  {id:6, handle:"@talal",   name:"Talal",   initials:"TL", color:"#2a6a5a"},
+  {id:7, handle:"@ruhi",    name:"Ruhi",    initials:"RU", color:"#8a4a9a"},
+  {id:8, handle:"@abdul",   name:"Abdul",   initials:"AB", color:"#4a6a2a"},
+  {id:9, handle:"@samar",   name:"Samar",   initials:"SM", color:"#9a3a5a"},
+  {id:10,handle:"@sahar",   name:"Sahar",   initials:"SH", color:"#3a5a9a"},
+  {id:11,handle:"@tegan",   name:"Tegan",   initials:"TG", color:"#6a3a2a"},
+  {id:12,handle:"@crystal", name:"Crystal", initials:"CR", color:"#1a6a6a"},
+  {id:13,handle:"@eric",    name:"Eric",    initials:"EC", color:"#7a5a1a"},
+  {id:14,handle:"@noah",    name:"Noah",    initials:"NO", color:"#2a4a7a"},
+  {id:15,handle:"@jdvance", name:"JD Vance",initials:"JD", color:"#5a2a2a"},
+  {id:16,handle:"@saatvik", name:"Saatvik", initials:"SV", color:"#3a7a4a"},
+  {id:17,handle:"@shehab",  name:"Shehab",  initials:"SB", color:"#6a2a6a"},
+  {id:18,handle:"@uzay",    name:"Uzay",    initials:"UZ", color:"#2a5a6a"},
+  {id:19,handle:"@huiyi",   name:"Huiyi",   initials:"HY", color:"#7a3a4a"},
+  {id:20,handle:"@rebecca", name:"Rebecca", initials:"RB", color:"#4a2a7a"},
+  {id:21,handle:"@rachel",  name:"Rachel",  initials:"RC", color:"#6a4a1a"},
+  {id:22,handle:"@lennart", name:"Lennart", initials:"LN", color:"#1a4a5a"},
+  {id:23,handle:"@aimen",   name:"Aimen",   initials:"AI", color:C.pink},
+];
+
+const INIT_FEED = [
+  {id:1,friendId:1,albumId:"blonde",score:9.4,text:'"emotionally devastating. had to sit in my car for 20 mins."',reactions:{fire:12,cry:4,target:7},comments:[
+    {id:1,friendId:2,text:"naman agrees with all of this",time:"1h ago"},
+    {id:2,friendId:3,text:"ahmed crying in the car too rn",time:"45m ago"},
+    {id:3,friendId:4,text:"zawwar said this first 3 years ago",time:"12m ago"},
+  ]},
+  {id:2,friendId:2,albumId:"ctrl",score:7.2,text:'"overrated tbh. a few bangers but loses steam halfway."',reactions:{skull:9,handshake:2},comments:[
+    {id:1,friendId:5,text:"sarah has been saying this for years",time:"2h ago"},
+    {id:2,friendId:1,text:"eren finally agrees with naman on something",time:"1h ago"},
+  ]},
+  {id:3,friendId:6,albumId:"iceman-drake-2025",score:8.1,text:'"better than I expected. talal approves the winter drip."',reactions:{fire:6,target:3},comments:[
+    {id:1,friendId:7,text:"ruhi said the same thing",time:"30m ago"},
+  ]},
+  {id:4,friendId:3,albumId:"tpab",score:10.0,text:'"not a single skip. ahmed said what ahmed said."',reactions:{fire:18,cry:2},comments:[
+    {id:1,friendId:1,text:"eren agrees. factual.",time:"3h ago"},
+    {id:2,friendId:2,text:"naman has this on repeat",time:"2h ago"},
+    {id:3,friendId:8,text:"abdul said correct",time:"1h ago"},
+    {id:4,friendId:4,text:"zawwar glad we all agree",time:"30m ago"},
+  ]},
+  {id:5,friendId:9,albumId:"currents",score:9.1,text:'"samar said currents is the indie album of the generation"',reactions:{fire:8,target:4},comments:[
+    {id:1,friendId:10,text:"sahar agrees strongly",time:"45m ago"},
+  ]},
+  {id:6,friendId:11,albumId:"lemonade",score:8.8,text:'"tegan said lemonade is a cinematic experience not just an album"',reactions:{fire:11,cry:6},comments:[]},
+];
+
+const PUBLIC_REVIEWS = {
+  default:[
+    {handle:"@richkid99",initials:"RK",color:C.teal,score:10.0,text:'"frank said not making this easy to find — that made it hit harder"',likes:847},
+    {handle:"@xander_z",initials:"XZ",color:C.coral,score:8.2,text:'"nights is a 10. the rest is vibes with no structure. fight me."',likes:612},
+    {handle:"@poolparty",initials:"PP",color:C.amber,score:9.8,text:'"no skips but also no hooks. just feelings. 9.8/10"',likes:441},
+    {handle:"@luna_m",initials:"LM",color:C.blue,score:9.5,text:'"cried to this album in 4 different countries. global experience."',likes:388},
+    {handle:"@dvntless",initials:"DV",color:C.indigo,score:6.5,text:'"channel orange is better and i will die on this hill."',likes:271},
+  ],
+  "iceman-drake-2025":[
+    {handle:"@6godbeliever",initials:"6G",color:"#1a3a5c",score:9.0,text:'"drake woke up and said let me freeze everyone again"',likes:2841},
+    {handle:"@ovo_stan",initials:"OS",color:C.teal,score:8.5,text:'"certified cold. diamond blizzard is the standout easy"',likes:1902},
+    {handle:"@xander_z",initials:"XZ",color:C.coral,score:7.0,text:'"winter aesthetic is cool but the bars aren\'t there like they used to be"',likes:1340},
+    {handle:"@poolparty",initials:"PP",color:C.amber,score:8.0,text:'"better than certified lover boy at least"',likes:987},
+    {handle:"@hiphophead",initials:"HH",color:C.purple,score:6.5,text:'"frozen is a banger but the rest is filler. 6.5 is generous"',likes:654},
+  ],
+};
+
+const SONG_REVIEWS = [
+  {handle:"@richkid99",initials:"RK",color:C.teal,score:10.0,text:'"two songs pretending to be one. both are perfect."',likes:1200},
+  {handle:"@poolparty",initials:"PP",color:C.amber,score:9.8,text:'"i don\'t know what happens at 2:39 but i\'ve never been the same."',likes:934},
+  {handle:"@luna_m",initials:"LM",color:C.blue,score:9.5,text:'"frank really said here\'s 5 minutes, figure it out."',likes:671},
+  {handle:"@dvntless",initials:"DV",color:C.indigo,score:8.8,text:'"the beat switch deserves its own album tbh"',likes:441},
+];
+
+
+/* ─── API LAYER ───────────────────────────────────────────────
+   🔌 Set API_BASE to your backend URL when running the server.
+   When API_BASE is null, the app uses local mock data.
+   
+   To enable: change null to 'http://localhost:3001'
+   ─────────────────────────────────────────────────────────── */
+const API_BASE = 'http://localhost:3001'; // connected to local backend
+
+async function api(path, opts={}) {
+  if (!API_BASE) return null;
+  try {
+    const res = await fetch(API_BASE + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch { return null; }
+}
+
+/* Search: tries API first, falls back to local filter */
+async function searchMusic(q, albums) {
+  const data = await api(`/api/search?q=${encodeURIComponent(q)}&type=release`);
+  if (data?.results?.length) {
+    return data.results.map(r => ({
+      id: r.mbid, mbid: r.mbid,
+      title: r.title, artist: r.artist, year: parseInt(r.year)||0,
+      tracks: r.tracks||12, genre: 'Unknown', color: '#555',
+      avg: r.avg||null, myScore: r.myScore||null, myReview: r.myReview||'',
+      ratings: r.ratings||0, coverUrl: r.coverUrl,
+    }));
+  }
+  return albums.filter(a =>
+    a.title.toLowerCase().includes(q.toLowerCase()) ||
+    a.artist.toLowerCase().includes(q.toLowerCase())
+  );
+}
+
+/* Get album: tries API for fresh data + cover art */
+async function getAlbumDetail(mbid) {
+  return api(`/api/album/${mbid}`);
+}
+
+/* Save rating: posts to API, also updates local state */
+async function postRating(mbid, type, score, review) {
+  return api('/api/rate', {
+    method: 'POST',
+    body: JSON.stringify({ mbid, type, score, review, userId: 1 }),
+  });
+}
+
+/* Get cover art URL for an album */
+function CoverArt({ album, size=44, radius=6 }) {
+  const [url, setUrl] = useState(album.coverUrl || null);
+  useEffect(() => {
+    if (!url && album.mbid && API_BASE) {
+      fetch(`${API_BASE}/api/cover/${album.mbid}`)
+        .then(r=>r.ok?r.json():null)
+        .then(d=>{ if(d?.url) setUrl(d.url); })
+        .catch(()=>{});
+    }
+  }, [album.mbid]);
+  if (url) return (
+    <img src={url} alt={album.title}
+      style={{width:px(size),height:px(size),borderRadius:px(radius),objectFit:"cover",flexShrink:0}}
+      onError={()=>setUrl(null)}/>
+  );
+  return <div style={{width:px(size),height:px(size),borderRadius:px(radius),background:album.color||'#555',flexShrink:0}}/>;
+}
+
+/* ─── HELPERS ─── */
+const px = v=>`${v}px`;
+const getSongs = (albumId,songsState)=>{
+  const custom = songsState?.[albumId];
+  if(custom) return custom;
+  const base = SONGS_DATA[albumId];
+  if(base) return base;
+  const album = ALL_ALBUMS.find(a=>a.id===albumId||a.mbid===albumId);
+  const n = album?.tracks||10;
+  return Array.from({length:n},(_,i)=>({id:i+1,title:`Track ${i+1}`,dur:"3:30",avg:+(7+Math.random()*2.5).toFixed(1),mine:null,myReview:""}));
+};
+
+/* ─── BASE COMPONENTS ─── */
+function Avatar({initials,color,size=28}){
+  return <div style={{width:px(size),height:px(size),borderRadius:"50%",background:color,
+    display:"flex",alignItems:"center",justifyContent:"center",
+    fontSize:px(size*0.33),fontWeight:700,color:C.white,flexShrink:0}}>{initials}</div>;
+}
+/* Art cache keyed by "title::artist" so we never need fake MBIDs */
+const _artCache = {};
+
+function AlbumArt({color,size=44,radius=6,album=null}){
+  // Cache key: prefer real mbid, fall back to "title::artist"
+  const cacheKey = album?.mbid
+    ? `mbid:${album.mbid}`
+    : album?.title && album?.artist
+      ? `ta:${album.title}::${album.artist}`.toLowerCase()
+      : null;
+
+  const [url,setUrl] = useState(album?.coverUrl || (cacheKey && _artCache[cacheKey]) || null);
+  const [failed,setFailed] = useState(false);
+
+  useEffect(()=>{
+    if(url||failed||!API_BASE||!album?.title||!album?.artist) return;
+    if(cacheKey && _artCache[cacheKey]){ setUrl(_artCache[cacheKey]); return; }
+
+    // Use /api/resolve which searches MB by title+artist — guaranteed correct match
+    const endpoint = album.mbid
+      ? `${API_BASE}/api/cover/${album.mbid}`
+      : `${API_BASE}/api/resolve?title=${encodeURIComponent(album.title)}&artist=${encodeURIComponent(album.artist)}`;
+
+    fetch(endpoint)
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{
+        const imgUrl = d?.url || d?.coverUrl || null;
+        if(imgUrl && cacheKey){
+          _artCache[cacheKey]=imgUrl;
+          setUrl(imgUrl);
+        }
+        // Also store the real mbid for future track lookups
+        if(d?.releaseMbid && album && !album.mbid){
+          album.mbid = d.releaseMbid;
+        }
+      })
+      .catch(()=>{});
+  },[cacheKey]);
+
+  if(url && !failed) return (
+    <img src={url} alt={album?.title||''}
+      style={{width:px(size),height:px(size),borderRadius:px(radius),objectFit:"cover",flexShrink:0}}
+      onError={()=>{ setFailed(true); }}/>
+  );
+  return <div style={{width:px(size),height:px(size),borderRadius:px(radius),
+    background:color||album?.color||'#555',flexShrink:0,
+    display:"flex",alignItems:"center",justifyContent:"center"}}>
+    {size>40&&<span style={{fontSize:px(size*0.35),opacity:0.3}}>♪</span>}
+  </div>;
+}
+function Score({value,size=13}){
+  if(value===null||value===undefined) return null;
+  return <div style={{display:"flex",alignItems:"baseline",gap:1,flexShrink:0}}>
+    <span style={{fontSize:px(size),fontWeight:700,color:C.pink,fontFamily:"'Arial Black',Arial"}}>{value.toFixed(1)}</span>
+    <span style={{fontSize:px(size*0.6),color:C.dgray}}>/10</span>
+  </div>;
+}
+function NavIcon({type,active}){
+  const col=active?C.pink:C.gray;
+  const s={width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center"};
+  if(type==="home") return <svg style={s} viewBox="0 0 24 24" fill={active?"none":"none"} stroke={col} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>;
+  if(type==="explore") return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+  if(type==="activity") return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>;
+  if(type==="profile") return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+  return null;
+}
+function NavBar({active,onNav}){
+  const items=[{k:"home",l:"Home"},{k:"explore",l:"Explore"},{k:"activity",l:"Activity"},{k:"profile",l:"Profile"}];
+  return <div style={{display:"flex",justifyContent:"space-around",padding:"8px 0 14px",
+    borderTop:`0.5px solid ${C.border}`,flexShrink:0,background:C.bg}}>
+    {items.map(it=><div key={it.k} onClick={()=>onNav(it.k)}
+      style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",flex:1}}>
+      <NavIcon type={it.k} active={active===it.k}/>
+      <span style={{fontSize:8,color:active===it.k?C.pink:C.gray,textTransform:"uppercase",letterSpacing:"0.04em"}}>{it.l}</span>
+    </div>)}
+  </div>;
+}
+function BackRow({label,onBack}){
+  return <div onClick={onBack} style={{display:"flex",alignItems:"center",gap:6,
+    padding:"8px 0 4px",cursor:"pointer",flexShrink:0}}>
+    <span style={{fontSize:18,color:C.gray}}>←</span>
+    <span style={{fontSize:11,color:C.gray}}>{label}</span>
+  </div>;
+}
+function SectionHead({children,action,onAction}){
+  return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+    flexShrink:0,margin:"7px 0 4px"}}>
+    <span style={{fontSize:10,fontWeight:700,color:C.gray,textTransform:"uppercase",letterSpacing:"0.1em"}}>{children}</span>
+    {action&&<span onClick={onAction} style={{fontSize:10,color:C.pink,fontWeight:700,cursor:"pointer"}}>{action}</span>}
+  </div>;
+}
+function TabBar({tabs,active,onTab}){
+  return <div style={{display:"flex",borderBottom:`0.5px solid ${C.border}`,flexShrink:0}}>
+    {tabs.map(t=><div key={t} onClick={()=>onTab(t)} style={{flex:1,textAlign:"center",
+      fontSize:10,fontWeight:700,padding:"8px 0",color:active===t?C.white:C.gray,
+      textTransform:"uppercase",letterSpacing:"0.05em",position:"relative",cursor:"pointer"}}>
+      {t}
+      {active===t&&<div style={{position:"absolute",bottom:-1,left:"25%",right:"25%",height:2,background:C.pink,borderRadius:1}}/>}
+    </div>)}
+  </div>;
+}
+function RatingSlider({value,onChange}){
+  return <div>
+    <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:4,margin:"10px 0 6px"}}>
+      <span style={{fontSize:48,fontWeight:900,color:C.pink,fontFamily:"'Arial Black',Arial",lineHeight:1}}>
+        {value===null?"—":value.toFixed(1)}
+      </span>
+      {value!==null&&<span style={{fontSize:16,color:C.dgray,fontWeight:700}}>/10</span>}
+    </div>
+    <input type="range" min="0" max="100" step="1"
+      value={value===null?0:Math.round(value*10)}
+      onChange={e=>onChange(parseFloat(e.target.value)/10)}/>
+    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.dgray,marginTop:-2}}>
+      <span>0</span><span>10</span>
+    </div>
+  </div>;
+}
+function FeedDivider({label}){
+  return <div style={{display:"flex",alignItems:"center",gap:6,margin:"6px 0"}}>
+    <div style={{flex:1,height:"0.5px",background:C.border}}/>
+    <span style={{fontSize:8,color:"#333",textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span>
+    <div style={{flex:1,height:"0.5px",background:C.border}}/>
+  </div>;
+}
+function Modal({children,onClose}){
+  return <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.82)",
+    display:"flex",alignItems:"flex-end",zIndex:100,borderRadius:"inherit"}}
+    onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div style={{background:"#161616",borderRadius:"16px 16px 0 0",
+      padding:"0 16px 28px",width:"100%",maxHeight:"90%",overflowY:"auto"}}>
+      <div style={{width:36,height:3,background:"#333",borderRadius:2,margin:"12px auto 14px"}}/>
+      {children}
+    </div>
+  </div>;
+}
+
+/* ─── COMMENT THREAD ─── */
+function CommentThread({comments,onAdd,friendId=0}){
+  const [text,setText]=useState("");
+  const me={initials:"JE",color:C.pink};
+  const submit=()=>{
+    if(!text.trim()) return;
+    onAdd(text.trim());
+    setText("");
+  };
+  return <div style={{marginTop:6}}>
+    {comments.map((c,i)=>{
+      const fr=FRIENDS.find(f=>f.id===c.friendId)||me;
+      return <div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"flex-start"}}>
+        <Avatar initials={fr.initials||"ME"} color={fr.color||C.pink} size={18}/>
+        <div style={{flex:1,background:C.mid,borderRadius:8,padding:"5px 8px"}}>
+          <span style={{fontSize:9,fontWeight:700,color:C.white}}>{fr.handle||"@you"} </span>
+          <span style={{fontSize:9,color:C.lgray}}>{c.text}</span>
+          <div style={{fontSize:8,color:C.dgray,marginTop:2}}>{c.time||"just now"}</div>
+        </div>
+      </div>;
+    })}
+    <div style={{display:"flex",gap:6,alignItems:"center",marginTop:4}}>
+      <Avatar initials="JE" color={C.pink} size={18}/>
+      <div style={{flex:1,display:"flex",gap:5,background:C.mid,borderRadius:20,padding:"5px 10px"}}>
+        <input value={text} onChange={e=>setText(e.target.value.slice(0,200))}
+          onKeyDown={e=>e.key==="Enter"&&submit()}
+          placeholder="Add a comment..."
+          style={{flex:1,background:"none",border:"none",outline:"none",fontSize:10,color:C.white}}/>
+        {text.trim()&&<span onClick={submit} style={{color:C.pink,fontWeight:700,fontSize:10,cursor:"pointer"}}>→</span>}
+      </div>
+    </div>
+  </div>;
+}
+
+/* ─── ONBOARDING ─── */
+function ScreenWelcome({onNext}){
+  return <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",
+    justifyContent:"center",padding:"32px 24px",gap:18,background:C.bg}}>
+    <div style={{fontSize:42,fontWeight:900,color:C.pink,fontFamily:"'Arial Black',Arial",
+      letterSpacing:"-1px",textAlign:"center",lineHeight:1}}>GROOVELOG</div>
+    <div style={{fontSize:13,color:C.gray,textAlign:"center",lineHeight:1.65}}>Rate, review and discover music with people who get it</div>
+    <div onClick={onNext} style={{width:"100%",background:C.pink,borderRadius:12,padding:"14px",
+      textAlign:"center",fontSize:13,fontWeight:700,color:C.white,textTransform:"uppercase",
+      letterSpacing:"0.1em",marginTop:10,cursor:"pointer"}}>Create account</div>
+    <div style={{fontSize:12,color:C.gray}}>Already have an account? <span style={{color:C.pink,fontWeight:700,cursor:"pointer"}}>Log in</span></div>
+    <div style={{fontSize:10,color:C.dgray,textAlign:"center",lineHeight:1.6}}>By continuing you agree to our Terms and Privacy Policy</div>
+  </div>;
+}
+const SEED_GENRES = [
+  { label:"Hip-Hop 🎤", genres:["Hip-Hop"] },
+  { label:"R&B / Soul 🎵", genres:["R&B","Soul"] },
+  { label:"Indie / Alt 🌿", genres:["Indie","Alt-Rock"] },
+  { label:"Electronic / Jazz 🎹", genres:["Electronic","Jazz"] },
+  { label:"Pop ✨", genres:["Pop"] },
+];
+
+function ScreenSeedTaste({onDone}){
+  const [sel,setSel]=useState([]);
+  const [activeGenre,setActiveGenre]=useState(0);
+  const toggle=id=>setSel(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
+  const genreAlbums=ALL_ALBUMS.filter(a=>SEED_GENRES[activeGenre].genres.includes(a.genre)).slice(0,12);
+  return <div style={{flex:1,display:"flex",flexDirection:"column",background:C.bg,overflow:"hidden"}}>
+    <div style={{padding:"14px 14px 0",flexShrink:0}}>
+      <div style={{fontSize:16,fontWeight:700,color:C.white,marginBottom:3}}>What do you listen to?</div>
+      <div style={{fontSize:11,color:C.gray,marginBottom:12}}>Pick at least 5 albums you love to seed your feed</div>
+      {/* Genre tabs */}
+      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:10}}>
+        {SEED_GENRES.map((g,i)=><div key={i} onClick={()=>setActiveGenre(i)}
+          style={{flexShrink:0,background:activeGenre===i?C.pink:C.psoft,
+            border:`0.5px solid ${activeGenre===i?C.pink:C.pink+"33"}`,
+            borderRadius:20,padding:"5px 12px",fontSize:10,fontWeight:700,
+            color:activeGenre===i?C.white:C.pink,cursor:"pointer"}}>{g.label}</div>)}
+      </div>
+    </div>
+    {/* Album grid — scrollable */}
+    <div style={{flex:1,overflowY:"auto",padding:"0 14px"}}>
+      <div style={{display:"flex",flexWrap:"wrap",gap:10,paddingBottom:8}}>
+        {genreAlbums.map(a=>{
+          const on=sel.includes(a.id);
+          return <div key={a.id} onClick={()=>toggle(a.id)} style={{width:80,cursor:"pointer"}}>
+            <div style={{position:"relative",width:80,height:80,borderRadius:9,overflow:"hidden",
+              border:on?`2.5px solid ${C.pink}`:"2px solid #2a2a2a",boxSizing:"border-box"}}>
+              <AlbumArt color={a.color} size={80} radius={7} album={a}/>
+              {on&&<div style={{position:"absolute",inset:0,background:"rgba(255,60,172,0.25)",
+                display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <div style={{width:22,height:22,background:C.pink,borderRadius:"50%",
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:C.white,fontWeight:700}}>✓</div>
+              </div>}
+            </div>
+            <div style={{fontSize:9,color:C.white,fontWeight:600,marginTop:4,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.title}</div>
+            <div style={{fontSize:8,color:C.gray,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.artist}</div>
+          </div>;
+        })}
+      </div>
+    </div>
+    {/* Footer */}
+    <div style={{padding:"10px 14px 16px",flexShrink:0,borderTop:`0.5px solid #1e1e1e`,background:C.bg}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:9,height:9,borderRadius:"50%",background:sel.length>=5?C.pink:C.gray}}/>
+          <div style={{fontSize:10,color:C.lgray}}>{sel.length} selected{sel.length<5?` — ${5-sel.length} more to go`:" — ready!"}</div>
+        </div>
+        <div style={{fontSize:10,color:C.gray}}>Browse all genres above ↑</div>
+      </div>
+      <div onClick={sel.length>=5?onDone:null}
+        style={{background:sel.length>=5?C.pink:"#2a2a2a",borderRadius:11,padding:"13px",
+          textAlign:"center",fontSize:12,fontWeight:700,color:sel.length>=5?C.white:C.gray,
+          textTransform:"uppercase",letterSpacing:"0.1em",cursor:sel.length>=5?"pointer":"default"}}>
+        {sel.length>=5?"Let's go →":`Pick ${5-sel.length} more`}
+      </div>
+    </div>
+  </div>;
+}
+
+/* ─── HOME ─── */
+function ScreenHome({albums,feed,onAlbum,onSearch,onFriend,onUpdateFeed}){
+  const [openComments,setOpenComments]=useState(null);
+  const [reacted,setReacted]=useState({});
+  const emojiMap={fire:"🔥",cry:"😭",target:"🎯",skull:"💀",handshake:"🤝"};
+  const trending=albums.filter(a=>a.trending);
+  const addComment=(feedId,text)=>{
+    onUpdateFeed(feedId,text);
+  };
+  return <div style={{flex:1,overflowY:"auto",padding:"0 12px",background:C.bg}}>
+    <div style={{fontSize:16,fontWeight:700,color:C.white,margin:"6px 0 10px"}}>Groovelog</div>
+    <div onClick={onSearch} style={{display:"flex",alignItems:"center",gap:8,background:C.mid,
+      borderRadius:10,padding:"10px 12px",cursor:"text",marginBottom:10,flexShrink:0}}>
+      <span style={{fontSize:15,color:"#555"}}>🔍</span>
+      <span style={{fontSize:11,color:"#555"}}>Search albums, artists, songs...</span>
+    </div>
+    <SectionHead>Trending this week</SectionHead>
+    <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,marginBottom:4,
+      WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
+      {trending.map(a=><div key={a.id} onClick={()=>onAlbum(a)} style={{flexShrink:0,cursor:"pointer",width:68}}>
+        <div style={{position:"relative"}}>
+          <AlbumArt color={a.color} size={68} radius={8} album={a}/>
+          {a.new&&<div style={{position:"absolute",top:4,right:4,background:C.pink,borderRadius:4,
+            padding:"1px 5px",fontSize:7,fontWeight:700,color:C.white}}>NEW</div>}
+        </div>
+        <div style={{fontSize:9,fontWeight:700,color:C.white,marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.title}</div>
+        <div style={{fontSize:8,color:C.gray,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.artist}</div>
+        <div style={{fontSize:9,color:C.pink,fontWeight:700}}>{a.avg}</div>
+      </div>)}
+    </div>
+    <SectionHead>Friends' recent reviews</SectionHead>
+    {feed.map((item)=>{
+      const friend=FRIENDS.find(f=>f.id===item.friendId);
+      const album=albums.find(a=>a.id===item.albumId);
+      if(!friend||!album) return null;
+      const isOpen=openComments===item.id;
+      return <div key={item.id} style={{background:C.card,borderRadius:10,overflow:"hidden",marginBottom:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,padding:"8px 10px 7px"}}>
+          <div onClick={()=>onFriend(friend)} style={{cursor:"pointer"}}>
+            <Avatar initials={friend.initials} color={friend.color} size={24}/>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:10,fontWeight:700,color:C.white}}>{friend.handle}</div>
+            <div style={{fontSize:10,color:"#999",lineHeight:1.35,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.text}</div>
+          </div>
+        </div>
+        <div onClick={()=>onAlbum(album)} style={{display:"flex",alignItems:"center",gap:8,
+          background:C.dark,padding:"6px 10px",cursor:"pointer"}}>
+          <AlbumArt color={album.color} size={30} radius={4} album={album}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:10,fontWeight:700,color:C.white,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{album.title}</div>
+            <div style={{fontSize:9,color:C.gray}}>{album.artist}</div>
+          </div>
+          <Score value={item.score} size={15}/>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px 5px"}}>
+          {Object.entries(item.reactions).map(([k,v])=>{
+            const key=`${item.id}-${k}`;const on=reacted[key];
+            return <div key={k} onClick={()=>setReacted(r=>({...r,[key]:!r[key]}))}
+              style={{background:on?C.pdark:C.mid,borderRadius:20,padding:"2px 7px",fontSize:9,color:on?C.pink:"#777",cursor:"pointer"}}>
+              {emojiMap[k]} {on?v+1:v}
+            </div>;
+          })}
+          <div onClick={()=>setOpenComments(isOpen?null:item.id)}
+            style={{marginLeft:"auto",fontSize:9,color:isOpen?C.pink:C.gray,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
+            💬 {item.comments.length}
+          </div>
+        </div>
+        {isOpen&&<div style={{padding:"4px 10px 10px",borderTop:`0.5px solid #1e1e1e`}}>
+          <CommentThread comments={item.comments} onAdd={text=>addComment(item.id,text)}/>
+        </div>}
+      </div>;
+    })}
+    <div style={{height:10}}/>
+  </div>;
+}
+
+/* ─── SEARCH ─── */
+function ScreenSearch({albums,onBack,onAlbum}){
+  const [q,setQ]=useState("");
+  const [genre,setGenre]=useState("All");
+  const [results,setResults]=useState({artists:[],albums:[],tracks:[]});
+  const [searching,setSearching]=useState(false);
+
+  useEffect(()=>{
+    if(q.length<2){ setResults({artists:[],albums:[],tracks:[]}); return; }
+    const timer=setTimeout(async()=>{
+      setSearching(true);
+      try {
+        // Run artist + album searches in parallel
+        const [artistData, albumData] = await Promise.all([
+          api(`/api/search?q=${encodeURIComponent(q)}&type=artist&limit=3`),
+          api(`/api/search?q=${encodeURIComponent(q)}&type=release&limit=12`),
+        ]);
+        const apiArtists = artistData?.results || [];
+        const apiAlbums  = albumData?.results?.map(r=>({
+          id:r.mbid, mbid:r.mbid, title:r.title, artist:r.artist,
+          year:parseInt(r.year)||0, tracks:r.tracks||12, genre:"Unknown",
+          color:randomColor(r.mbid), avg:r.avg||null, myScore:r.myScore||null,
+          myReview:r.myReview||"", ratings:r.ratings||0, coverUrl:r.coverUrl,
+        })) || [];
+        // Local fallback
+        const localAlbums = albums.filter(a=>
+          a.title.toLowerCase().includes(q.toLowerCase())||
+          a.artist.toLowerCase().includes(q.toLowerCase()));
+        const merged = apiAlbums.length ? apiAlbums : localAlbums;
+        setResults({ artists:apiArtists, albums:merged, tracks:[] });
+      } catch(e) {
+        const local=albums.filter(a=>
+          a.title.toLowerCase().includes(q.toLowerCase())||
+          a.artist.toLowerCase().includes(q.toLowerCase()));
+        setResults({artists:[],albums:local,tracks:[]});
+      }
+      setSearching(false);
+    },400);
+    return()=>clearTimeout(timer);
+  },[q]);
+
+  // deterministic colour from mbid string
+  function randomColor(str){
+    const colors=["#533ab7","#1D9E75","#D85A30","#378ADD","#BA7517","#D4537E","#1a3a5c","#5a4080","#8a3060","#2a5a7a"];
+    let h=0; for(let i=0;i<(str||"").length;i++) h=(h*31+str.charCodeAt(i))&0xffff;
+    return colors[h%colors.length];
+  }
+
+  const browseAlbums = albums.filter(a=>genre==="All"||a.genre===genre);
+  const isSearching  = q.length >= 2;
+
+  return <div style={{flex:1,overflowY:"auto",padding:"0 12px",background:C.bg}}>
+    <div style={{marginTop:6,marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,background:C.mid,borderRadius:10,
+        padding:"10px 12px",border:`0.5px solid ${C.pink}44`}}>
+        <span style={{fontSize:15,color:C.pink}}>🔍</span>
+        <input autoFocus value={q} onChange={e=>setQ(e.target.value)}
+          placeholder="Search artists, albums, songs..."
+          style={{background:"none",border:"none",outline:"none",fontSize:11,color:C.white,flex:1}}/>
+        {q&&<span onClick={()=>setQ("")} style={{color:C.gray,cursor:"pointer",fontSize:14}}>✕</span>}
+      </div>
+    </div>
+
+    {!isSearching&&<>
+      {/* Genre browse when not searching */}
+      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:8}}>
+        {GENRES.map(g=><div key={g} onClick={()=>setGenre(g)}
+          style={{flexShrink:0,background:genre===g?C.pink:C.psoft,
+            border:`0.5px solid ${genre===g?C.pink:C.pink+"33"}`,
+            borderRadius:20,padding:"5px 12px",fontSize:10,fontWeight:700,
+            color:genre===g?C.white:C.pink,cursor:"pointer"}}>{g}</div>)}
+      </div>
+      <SectionHead>{genre==="All"?"All albums":genre}</SectionHead>
+      {browseAlbums.map(a=><div key={a.id} onClick={()=>onAlbum(a)}
+        style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",
+          borderBottom:`0.5px solid ${C.border}`,cursor:"pointer"}}>
+        <AlbumArt color={a.color} size={46} radius={6} album={a}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.white}}>{a.title}</div>
+          <div style={{fontSize:9,color:C.gray}}>{a.artist} · {a.year}</div>
+          <div style={{fontSize:9,color:"#555"}}>{a.genre}</div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+          {a.myScore&&<div style={{background:C.psoft,borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,color:C.pink}}>{a.myScore.toFixed(1)} you</div>}
+          {a.avg&&<div style={{fontSize:11,fontWeight:700,color:"#888"}}>{a.avg}</div>}
+        </div>
+      </div>)}
+    </>}
+
+    {isSearching&&<>
+      {searching&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"16px 0",color:C.gray,fontSize:11}}>
+        <span style={{fontSize:16}}>⏳</span> Searching MusicBrainz...
+      </div>}
+
+      {/* ARTISTS — shown first, prominent */}
+      {!searching&&results.artists.length>0&&<>
+        <SectionHead>Artists</SectionHead>
+        {results.artists.map((a,i)=><div key={i} onClick={()=>onAlbum({id:a.mbid,mbid:a.mbid,title:a.name,artist:a.name,color:randomColor(a.mbid),isArtist:true})}
+          style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`0.5px solid ${C.border}`,cursor:"pointer"}}>
+          <div style={{width:46,height:46,borderRadius:"50%",background:randomColor(a.mbid),
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:C.white,flexShrink:0}}>
+            {a.name.slice(0,2).toUpperCase()}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.white}}>{a.name}</div>
+            <div style={{fontSize:9,color:C.gray}}>{a.genre||"Artist"}</div>
+          </div>
+          <div style={{background:C.psoft,borderRadius:4,padding:"3px 8px",fontSize:9,fontWeight:700,color:C.pink}}>Artist</div>
+        </div>)}
+      </>}
+
+      {/* ALBUMS */}
+      {!searching&&results.albums.length>0&&<>
+        <SectionHead>Albums</SectionHead>
+        {results.albums.map((a,i)=><div key={i} onClick={()=>onAlbum(a)}
+          style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`0.5px solid ${C.border}`,cursor:"pointer"}}>
+          <AlbumArt color={a.color} size={46} radius={6} album={a}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.white}}>{a.title}</div>
+            <div style={{fontSize:9,color:C.gray}}>{a.artist} · {a.year||""}</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+            {a.myScore!=null&&<div style={{background:C.psoft,borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,color:C.pink}}>{a.myScore.toFixed(1)} you</div>}
+            {a.avg&&<div style={{fontSize:10,fontWeight:700,color:"#888"}}>{a.avg}</div>}
+          </div>
+        </div>)}
+      </>}
+
+      {!searching&&results.artists.length===0&&results.albums.length===0&&
+        <div style={{textAlign:"center",color:C.gray,fontSize:12,marginTop:28}}>No results for "{q}"</div>}
+    </>}
+    <div style={{height:14}}/>
+  </div>;
+}
+
+function randomColor(str){
+  const colors=["#533ab7","#1D9E75","#D85A30","#378ADD","#BA7517","#D4537E","#1a3a5c","#5a4080","#8a3060","#2a5a7a"];
+  let h=0; for(let i=0;i<(str||"").length;i++) h=(h*31+str.charCodeAt(i))&0xffff;
+  return colors[h%colors.length];
+}
+
+/* ─── ALBUM ─── */
+function ScreenAlbum({album,albums,songsState,onBack,onSong,onRate,onRec,onFriend,onEditReview,onSaveAlbum,onArtist}){
+  const [tab,setTab]=useState("Reviews");
+  const [liked,setLiked]=useState({});
+  // Live data fetched from API — overrides the stub passed in
+  const [liveAlbum,setLiveAlbum]=useState(null);
+  const [loadingTracks,setLoadingTracks]=useState(false);
+
+  // mbid is only valid if it looks like a UUID (has dashes and right length)
+  const looksLikeMbid = s => typeof s==='string' && s.length===36 && s.split('-').length===5;
+  const mbid = looksLikeMbid(album.mbid) ? album.mbid : looksLikeMbid(album.id) ? album.id : null;
+
+  useEffect(()=>{
+    if(!API_BASE) return;
+    setLoadingTracks(true);
+
+    const load = async () => {
+      try {
+        // If we have a real mbid use it directly, otherwise resolve from title+artist
+        let fetchMbid = mbid;
+        if(!fetchMbid && album.title && album.artist){
+          const resolved = await fetch(
+            `${API_BASE}/api/resolve?title=${encodeURIComponent(album.title)}&artist=${encodeURIComponent(album.artist)}`
+          ).then(r=>r.ok?r.json():null);
+          fetchMbid = resolved?.releaseMbid || resolved?.mbid || null;
+        }
+        if(!fetchMbid){ setLoadingTracks(false); return; }
+
+        const d = await fetch(`${API_BASE}/api/album/${fetchMbid}`)
+          .then(r=>r.ok?r.json():null);
+        if(d){ setLiveAlbum(d); }
+      } catch(e){ console.error('album load:', e); }
+      setLoadingTracks(false);
+    };
+    load();
+  },[album.id]);
+
+  // Use live data when available, fall back to stub
+  const current = liveAlbum || album;
+  // Tracks: use live tracklist, then local songsState, then local SONGS_DATA, then empty placeholders
+  const localSongs = getSongs(album.id, songsState);
+  const songs = (liveAlbum?.tracklist?.length ? liveAlbum.tracklist : localSongs) || [];
+  const rated=songs.filter(s=>s.mine!==null).length;
+  const topSong=songs.length?songs.reduce((a,b)=>(a.avg||0)>(b.avg||0)?a:b,songs[0]):null;
+  const pubRevs=PUBLIC_REVIEWS[album.mbid||album.id]||PUBLIC_REVIEWS.default;
+  const feedForAlbum=INIT_FEED.filter(f=>f.albumId===album.id);
+
+  return <div style={{flex:1,display:"flex",flexDirection:"column",background:C.bg,overflow:"hidden"}}>
+    <div style={{flexShrink:0,padding:"0 12px",background:C.bg}}>
+      <BackRow label="Back" onBack={onBack}/>
+      <div style={{display:"flex",gap:11,alignItems:"center",paddingBottom:10}}>
+        <AlbumArt color={current.color||album.color} size={60} radius={8} album={current}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.white,lineHeight:1.2}}>{current.title}</div>
+          <div style={{fontSize:10,color:C.gray,marginBottom:5}}>
+            <span onClick={()=>onArtist&&onArtist(current.artist)} style={{color:C.pink,fontWeight:700,cursor:"pointer"}}>{current.artist}</span>
+            {" · "}{current.year}{current.genre?" · "+current.genre:""}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <span style={{fontSize:11,fontWeight:700,color:"#888"}}>{current.avg||"—"}</span>
+            <span style={{fontSize:9,color:C.dgray}}>avg · {(current.ratings||0).toLocaleString()} ratings</span>
+            {current.myScore!=null&&<div style={{background:C.psoft,borderRadius:5,padding:"2px 7px",fontSize:10,fontWeight:700,color:C.pink}}>
+              {current.myScore.toFixed(1)} <span style={{fontSize:8,opacity:0.6}}>you</span></div>}
+          </div>
+        </div>
+        <div onClick={onRec} style={{border:`0.5px solid ${C.pink}44`,borderRadius:8,
+          padding:"7px 9px",display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer",flexShrink:0}}>
+          <span style={{fontSize:16,color:C.pink}}>↗</span>
+          <span style={{fontSize:8,color:C.pink,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>Rec</span>
+        </div>
+      </div>
+      {/* Your review — tappable to edit */}
+      {current.myScore!=null
+        ?<div onClick={onEditReview} style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+            background:C.psoft,borderRadius:8,padding:"8px 11px",marginBottom:9,cursor:"pointer",
+            border:`0.5px solid ${C.pink}22`}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:8,fontWeight:700,color:C.pink,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:2}}>Your rating · tap to edit</div>
+              <div style={{fontSize:9,color:"#888",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {current.myReview||"No written review yet — add one?"}
+              </div>
+            </div>
+            <div style={{display:"flex",alignItems:"baseline",gap:3,marginLeft:10}}>
+              <span style={{fontSize:22,fontWeight:900,color:C.pink,fontFamily:"'Arial Black',Arial"}}>{current.myScore.toFixed(1)}</span>
+              <span style={{fontSize:10,color:C.dgray}}>/10</span>
+            </div>
+          </div>
+        :<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+            background:C.card,borderRadius:8,padding:"8px 11px",marginBottom:9}}>
+            <span style={{fontSize:11,color:C.gray}}>You haven't rated this yet</span>
+            <div onClick={onRate} style={{background:C.pink,borderRadius:6,padding:"5px 12px",
+              fontSize:10,fontWeight:700,color:C.white,textTransform:"uppercase",cursor:"pointer"}}>Rate it</div>
+          </div>}
+      <TabBar tabs={["Reviews","Tracklist"]} active={tab} onTab={setTab}/>
+    </div>
+    <div style={{flex:1,overflowY:"auto",padding:"0 12px"}}>
+      {tab==="Reviews"?<>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 0 5px"}}>
+          <span style={{fontSize:9,fontWeight:700,color:C.gray,textTransform:"uppercase",letterSpacing:"0.1em"}}>Reviews</span>
+          <span style={{fontSize:9,color:C.pink,fontWeight:700}}>most liked ↓</span>
+        </div>
+        {feedForAlbum.length>0&&<>
+          <FeedDivider label="friends"/>
+          {feedForAlbum.map((fi,i)=>{
+            const fr=FRIENDS.find(f=>f.id===fi.friendId);
+            if(!fr) return null;
+            return <div key={i} style={{padding:"5px 0",borderBottom:`0.5px solid ${C.border}`}}>
+              <div style={{display:"flex",alignItems:"flex-start",gap:7}}>
+                <Avatar initials={fr.initials} color={fr.color} size={21}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+                    <span style={{fontSize:10,fontWeight:700,color:C.white}}>{fr.handle}</span>
+                    <span style={{fontSize:9,color:C.dgray}}>·</span>
+                    <span style={{fontSize:10,fontWeight:700,color:C.pink}}>{fi.score}</span>
+                  </div>
+                  <div style={{fontSize:10,color:"#aaa",lineHeight:1.4}}>{fi.text}</div>
+                  <div style={{display:"flex",gap:4,marginTop:4}}>
+                    {Object.entries(fi.reactions).slice(0,2).map(([k,v])=><div key={k}
+                      style={{background:C.pdark,borderRadius:20,padding:"2px 6px",fontSize:8,color:C.pink}}>
+                      {{fire:"🔥",cry:"😭",target:"🎯",skull:"💀",handshake:"🤝"}[k]} {v}</div>)}
+                    <span style={{fontSize:8,color:C.gray}}>💬 {fi.comments.length}</span>
+                  </div>
+                </div>
+              </div>
+            </div>;
+          })}
+        </>}
+        <FeedDivider label="everyone else"/>
+        {pubRevs.map((r,i)=><div key={i} style={{display:"flex",alignItems:"flex-start",gap:7,padding:"5px 0",borderBottom:`0.5px solid ${C.border}`}}>
+          <Avatar initials={r.initials} color={r.color} size={21}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.white}}>{r.handle}</span>
+              <span style={{fontSize:9,color:C.dgray}}>·</span>
+              <span style={{fontSize:10,fontWeight:700,color:C.pink}}>{r.score.toFixed(1)}</span>
+            </div>
+            <div style={{fontSize:10,color:"#aaa",lineHeight:1.4}}>{r.text}</div>
+            <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}>
+              <span onClick={()=>setLiked(l=>({...l,[i]:!l[i]}))} style={{fontSize:11,cursor:"pointer"}}><span style={{color:liked[i]?C.pink:C.dgray,fontSize:13}}>♥</span></span>
+              <span style={{fontSize:9,color:C.gray}}>{r.likes+(liked[i]?1:0)}</span>
+              <span style={{fontSize:9,color:C.dgray,marginLeft:"auto"}}>like only</span>
+            </div>
+          </div>
+        </div>)}
+        <div style={{height:14}}/>
+      </>:<>
+        {loadingTracks&&<div style={{textAlign:"center",padding:"20px 0",color:C.gray}}>
+          <div style={{fontSize:20,marginBottom:6}}>⏳</div>
+          <div style={{fontSize:10}}>Loading tracks from MusicBrainz...</div>
+        </div>}
+        {!loadingTracks&&<>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0 5px"}}>
+          <span style={{fontSize:9,fontWeight:700,color:C.gray,textTransform:"uppercase",letterSpacing:"0.08em"}}>Songs</span>
+          <span style={{fontSize:9,color:C.gray}}>{rated}/{songs.length} rated</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
+          <div style={{flex:1,height:2,background:"#1a1a1a",borderRadius:2,overflow:"hidden"}}>
+            <div style={{width:`${(rated/songs.length)*100}%`,height:"100%",background:C.pink,borderRadius:2}}/>
+          </div>
+          <span style={{fontSize:8,color:C.gray,flexShrink:0}}>{Math.round((rated/songs.length)*100)}%</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0 5px",borderBottom:`0.5px solid #1e1e1e`}}>
+          <span style={{width:14,flexShrink:0}}/>
+          <span style={{flex:1,fontSize:8,fontWeight:700,color:C.dgray,textTransform:"uppercase",letterSpacing:"0.08em"}}>Song</span>
+          <span style={{fontSize:8,fontWeight:700,color:C.dgray,textTransform:"uppercase",width:30,textAlign:"right"}}>Avg</span>
+          <span style={{fontSize:8,fontWeight:700,color:C.pink,textTransform:"uppercase",width:30,textAlign:"right",opacity:0.6}}>You</span>
+          <span style={{width:14,flexShrink:0}}/>
+        </div>
+        {songs.map((song,i)=>{
+          const isTop=topSong&&song.id===topSong.id;
+          return <div key={song.id} onClick={()=>onSong(song,album)}
+            style={{display:"flex",alignItems:"center",gap:6,padding:"6px 0",
+              borderBottom:`0.5px solid #161616`,cursor:"pointer"}}>
+            <span style={{fontSize:9,color:C.dgray,width:14,textAlign:"right",flexShrink:0}}>{i+1}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10,fontWeight:700,color:isTop?C.pink:C.white,
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                {song.title}{isTop?" ★":""}
+              </div>
+              <div style={{fontSize:8,color:C.dgray}}>{song.dur}{song.myReview?<span style={{color:C.pink}}> · reviewed</span>:""}</div>
+            </div>
+            <span style={{fontSize:10,fontWeight:700,color:isTop?C.pink:"#666",width:30,textAlign:"right",flexShrink:0}}>{song.avg}</span>
+            <span style={{fontSize:song.mine!=null?10:14,fontWeight:700,color:song.mine!=null?C.pink:"#2a2a2a",width:30,textAlign:"right",flexShrink:0}}>
+              {song.mine!=null?song.mine.toFixed(1):"+"}
+            </span>
+            <span style={{fontSize:12,color:"#2a2a2a",flexShrink:0}}>›</span>
+          </div>;
+        })}
+        <div style={{height:14}}/>
+        </>}
+      </>}
+    </div>
+  </div>;
+}
+
+/* ─── SONG ─── */
+function ScreenSong({song,album,onBack,onSaveSong}){
+  const [tab,setTab]=useState("Rate");
+  const [score,setScore]=useState(song.mine??null);
+  const [review,setReview]=useState(song.myReview||"");
+  const [liked,setLiked]=useState({});
+  const [comments,setComments]=useState([
+    {id:1,friendId:1,text:"this one hits different at night",time:"2h ago"},
+  ]);
+  const hasChanges=score!==song.mine||review!==song.myReview;
+  const save=()=>{
+    if(score===null) return;
+    onSaveSong({...song,mine:score,myReview:review});
+  };
+  return <div style={{flex:1,display:"flex",flexDirection:"column",background:C.bg,overflow:"hidden"}}>
+    <div style={{flexShrink:0,padding:"0 12px",background:C.bg}}>
+      <BackRow label={`${album.title} — Tracklist`} onBack={onBack}/>
+      <div style={{display:"flex",gap:10,alignItems:"center",paddingBottom:10}}>
+        <AlbumArt color={album.color} size={46} radius={6}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.white}}>{song.title}</div>
+          <div style={{fontSize:9,color:C.gray,marginBottom:4}}>{album.title} · {album.artist}</div>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <span style={{fontSize:11,fontWeight:700,color:"#888"}}>{song.avg}</span>
+            <span style={{fontSize:9,color:C.dgray}}>app avg</span>
+            {score!=null&&<span style={{fontSize:10,fontWeight:700,color:C.pink}}>you {score.toFixed(1)}</span>}
+          </div>
+        </div>
+      </div>
+      <TabBar tabs={["Rate","Reviews","Comments"]} active={tab} onTab={setTab}/>
+    </div>
+    <div style={{flex:1,overflowY:"auto",padding:"10px 12px 0"}}>
+      {tab==="Rate"&&<>
+        <div style={{background:C.card,borderRadius:10,padding:"14px",marginBottom:12}}>
+          <div style={{fontSize:9,fontWeight:700,color:C.gray,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>
+            {song.mine!=null?"Update your rating":"Rate this track"}
+          </div>
+          <RatingSlider value={score} onChange={setScore}/>
+        </div>
+        <div style={{background:C.card,borderRadius:10,padding:"12px",marginBottom:12}}>
+          <div style={{fontSize:9,fontWeight:700,color:C.gray,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Your take (optional)</div>
+          <textarea value={review} onChange={e=>setReview(e.target.value.slice(0,200))}
+            placeholder='Drop a quip — "this beat switch changed my life"'
+            style={{width:"100%",background:C.mid,border:`0.5px solid #333`,borderRadius:8,
+              padding:"9px 11px",fontSize:10,color:C.lgray,outline:"none",height:64,boxSizing:"border-box"}}/>
+          <div style={{fontSize:8,color:C.dgray,textAlign:"right",marginTop:3}}>{review.length}/200</div>
+        </div>
+        <div onClick={()=>score!=null&&save()}
+          style={{background:score!=null?C.pink:"#333",borderRadius:9,padding:"12px",
+            textAlign:"center",fontSize:11,fontWeight:700,color:score!=null?C.white:C.gray,
+            textTransform:"uppercase",letterSpacing:"0.08em",cursor:score!=null?"pointer":"default",marginBottom:12}}>
+          {score!=null?(song.mine!=null?"Update rating":"Log this track"):"Drag slider to rate"}
+        </div>
+      </>}
+      {tab==="Reviews"&&<>
+        <FeedDivider label="everyone"/>
+        {SONG_REVIEWS.map((r,i)=><div key={i} style={{display:"flex",alignItems:"flex-start",gap:7,padding:"5px 0",borderBottom:`0.5px solid ${C.border}`}}>
+          <Avatar initials={r.initials} color={r.color} size={21}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.white}}>{r.handle}</span>
+              <span style={{fontSize:9,color:C.dgray}}>·</span>
+              <span style={{fontSize:10,fontWeight:700,color:C.pink}}>{r.score.toFixed(1)}</span>
+            </div>
+            <div style={{fontSize:10,color:"#aaa",lineHeight:1.4}}>{r.text}</div>
+            <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}>
+              <span onClick={()=>setLiked(l=>({...l,[i]:!l[i]}))} style={{fontSize:11,cursor:"pointer"}}><span style={{color:liked[i]?C.pink:C.dgray,fontSize:13}}>♥</span></span>
+              <span style={{fontSize:9,color:C.gray}}>{r.likes+(liked[i]?1:0)}</span>
+            </div>
+          </div>
+        </div>)}
+        <div style={{height:14}}/>
+      </>}
+      {tab==="Comments"&&<>
+        <div style={{fontSize:9,color:C.gray,marginBottom:8,marginTop:4}}>Comments from friends on this track</div>
+        <CommentThread comments={comments} onAdd={text=>setComments(c=>[...c,{id:Date.now(),friendId:0,text,time:"just now"}])}/>
+        <div style={{height:14}}/>
+      </>}
+    </div>
+  </div>;
+}
+
+/* ─── EXPLORE ─── */
+function ScreenExplore({albums,onAlbum}){
+  const [tab,setTab]=useState("For you");
+  const [dismissed,setDismissed]=useState([]);
+  const recRaw=[
+    {friendId:1,  id:"ch-orange",   score:9.2, note:'"eren says you need channel ORANGE in your life"'},
+    {friendId:3,  id:"in-rainbows", score:9.5, note:'"ahmed says In Rainbows changed his life. start here."'},
+    {friendId:23, id:"care-for-me", score:9.7, note:'"aimen says Care For Me will fix whatever is wrong with you"'},
+  ];
+  const recData=recRaw
+    .map((r,i)=>({...r,album:albums.find(a=>a.id===r.id),origIdx:i}))
+    .filter(r=>r.album&&!dismissed.includes(r.origIdx));
+  return <div style={{flex:1,display:"flex",flexDirection:"column",background:C.bg,overflow:"hidden"}}>
+    <div style={{flexShrink:0,padding:"0 12px",background:C.bg}}>
+      <div style={{fontSize:16,fontWeight:700,color:C.white,margin:"6px 0 10px"}}>Explore</div>
+      <div style={{display:"flex",background:C.card,borderRadius:9,padding:3,gap:2,marginBottom:6}}>
+        {["For you","From friends"].map(t=><div key={t} onClick={()=>setTab(t)}
+          style={{flex:1,textAlign:"center",fontSize:10,fontWeight:700,padding:"6px 0",
+            borderRadius:7,background:tab===t?C.pink:"none",color:tab===t?C.white:C.gray,
+            cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.04em"}}>{t}</div>)}
+      </div>
+    </div>
+    <div style={{flex:1,overflowY:"auto",padding:"0 12px"}}>
+      {tab==="For you"?<>
+        <div style={{background:C.psoft,borderRadius:10,padding:"11px 12px",marginBottom:10}}>
+          <div style={{fontSize:9,fontWeight:700,color:C.pink,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:3}}>Because you rated Blonde 9.4</div>
+          <div style={{fontSize:13,fontWeight:700,color:C.white,lineHeight:1.2,marginBottom:2}}>Albums with a similar feel</div>
+          <div style={{fontSize:10,color:C.gray}}>Emotional · layered · genre-blurring</div>
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:14}}>
+          {[albums.find(a=>a.id==="ch-orange"),albums.find(a=>a.id==="in-rainbows"),albums.find(a=>a.id==="nfr")].filter(Boolean).map(a=><div key={a.id} onClick={()=>onAlbum(a)}
+            style={{flex:1,background:C.card,borderRadius:9,padding:9,cursor:"pointer",minWidth:0}}>
+            <div style={{width:"100%",aspectRatio:"1",borderRadius:6,marginBottom:6,overflow:"hidden",position:"relative"}}>
+              <AlbumArt color={a.color} size="100%" radius={6} album={a}/>
+              <div style={{position:"absolute",inset:0,borderRadius:6,overflow:"hidden"}}>
+                <AlbumArt color={a.color} size={90} radius={6} album={a}/>
+              </div>
+            </div>
+            <div style={{fontSize:9,fontWeight:700,color:C.white,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.title}</div>
+            <div style={{fontSize:8,color:C.gray,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.artist}</div>
+            <div style={{fontSize:9,fontWeight:700,color:C.gray,marginTop:2}}>avg {a.avg}</div>
+          </div>)}
+        </div>
+        <SectionHead>Because you rated TPAB 10.0</SectionHead>
+        <div style={{display:"flex",gap:8,marginBottom:14}}>
+          {[albums.find(a=>a.id==="care-for-me"),albums.find(a=>a.id==="madvillainy"),albums.find(a=>a.id==="low-end")].filter(Boolean).map(a=><div key={a.id} onClick={()=>onAlbum(a)}
+            style={{flex:1,background:C.card,borderRadius:9,padding:9,cursor:"pointer",minWidth:0}}>
+            <div style={{width:"100%",aspectRatio:"1",borderRadius:6,marginBottom:6,overflow:"hidden"}}>
+              <AlbumArt color={a.color} size={90} radius={6} album={a}/>
+            </div>
+            <div style={{fontSize:9,fontWeight:700,color:C.white,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.title}</div>
+            <div style={{fontSize:8,color:C.gray}}>{a.artist}</div>
+            <div style={{fontSize:9,fontWeight:700,color:C.gray,marginTop:2}}>avg {a.avg}</div>
+          </div>)}
+        </div>
+        <SectionHead>New this week</SectionHead>
+        {albums.filter(a=>a.new).map(a=><div key={a.id} onClick={()=>onAlbum(a)}
+          style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0",borderBottom:`0.5px solid ${C.border}`,cursor:"pointer"}}>
+          <AlbumArt color={a.color} size={46} radius={6} album={a}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.white}}>{a.title}</div>
+            <div style={{fontSize:9,color:C.gray}}>{a.artist} · {a.year}</div>
+            <div style={{fontSize:9,color:C.gray}}>{a.ratings.toLocaleString()} ratings</div>
+          </div>
+          <div style={{background:C.pink,borderRadius:4,padding:"2px 6px",fontSize:8,fontWeight:700,color:C.white,flexShrink:0}}>NEW</div>
+        </div>)}
+      </>:<>
+        {recData.length>0&&<div style={{display:"flex",alignItems:"center",gap:5,margin:"6px 0 8px"}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:C.pink}}/>
+          <span style={{fontSize:9,color:C.pink,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em"}}>
+            {recData.length} new recommendation{recData.length>1?"s":""}
+          </span>
+        </div>}
+        {recData.map((r,i)=>{
+          const friend=FRIENDS.find(f=>f.id===r.friendId);
+          const album=r.album;
+          if(!friend||!album) return null;
+          return <div key={i} style={{background:C.card,borderRadius:10,padding:"10px 11px",marginBottom:9}}>
+            <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
+              <Avatar initials={friend.initials} color={friend.color} size={23}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,fontWeight:700,color:C.white}}>{friend.handle}</div>
+                <div style={{fontSize:9,color:C.gray}}>recommended you an album</div>
+              </div>
+              <div style={{width:8,height:8,borderRadius:"50%",background:C.pink}}/>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:6}}>
+              <AlbumArt color={album.color} size={40} radius={6} album={album}/>
+              <div style={{flex:1}}><div style={{fontSize:11,fontWeight:700,color:C.white}}>{album.title}</div><div style={{fontSize:9,color:C.gray}}>{album.artist} · {album.year}</div></div>
+              <Score value={r.score} size={14}/>
+            </div>
+            <div style={{fontSize:10,color:"#aaa",fontStyle:"italic",marginBottom:8}}>{r.note}</div>
+            <div style={{display:"flex",gap:7}}>
+              <div onClick={()=>onAlbum(album)} style={{flex:1,background:C.pink,borderRadius:7,padding:"6px 0",textAlign:"center",fontSize:10,fontWeight:700,color:C.white,textTransform:"uppercase",cursor:"pointer"}}>Rate it</div>
+              <div style={{flex:1,background:C.mid,borderRadius:7,padding:"6px 0",textAlign:"center",fontSize:10,fontWeight:700,color:C.gray,textTransform:"uppercase",cursor:"pointer"}}>Save</div>
+              <div onClick={()=>setDismissed(d=>[...d,r.origIdx])} style={{flex:1,background:C.mid,borderRadius:7,padding:"6px 0",textAlign:"center",fontSize:10,fontWeight:700,color:C.gray,textTransform:"uppercase",cursor:"pointer"}}>Dismiss</div>
+            </div>
+          </div>;
+        })}
+        {recData.length===0&&<div style={{textAlign:"center",color:C.gray,fontSize:12,marginTop:28}}>No new recommendations</div>}
+      </>}
+      <div style={{height:14}}/>
+    </div>
+  </div>;
+}
+
+/* ─── ACTIVITY ─── */
+function ScreenActivity({albums,onAlbum,onFriend}){
+  const [recDone,setRecDone]=useState(false);
+  const a1=albums.find(a=>a.id==="blonde"),a3=albums.find(a=>a.id==="ctrl"),a8=albums.find(a=>a.id==="care-for-me");
+  return <div style={{flex:1,overflowY:"auto",padding:"0 12px",background:C.bg}}>
+    <div style={{fontSize:16,fontWeight:700,color:C.white,margin:"6px 0 10px"}}>Activity</div>
+    <SectionHead>New</SectionHead>
+    {[
+      {av:"MK",ac:C.violet,msg:<><b>@maya</b><span style={{color:C.lgray}}> liked your review of </span><span style={{color:C.pink}}>Blonde</span></>,t:"2m ago",album:a1},
+      {av:"JR",ac:C.green,msg:<><b>@jake</b><span style={{color:C.lgray}}> commented on your </span><span style={{color:C.pink}}>CTRL</span><span style={{color:C.lgray}}> review</span></>,sub:'"you\'re wrong but i respect it"',t:"14m ago",album:a3},
+    ].map((n,i)=><div key={i} onClick={()=>n.album&&onAlbum(n.album)}
+      style={{display:"flex",alignItems:"flex-start",gap:8,padding:"7px 0",borderBottom:`0.5px solid #161616`,cursor:"pointer"}}>
+      <Avatar initials={n.av} color={n.ac} size={23}/>
+      <div style={{flex:1}}>
+        <div style={{fontSize:10,color:C.white,lineHeight:1.45}}>{n.msg}</div>
+        {n.sub&&<div style={{fontSize:10,color:C.gray,fontStyle:"italic",marginTop:1}}>{n.sub}</div>}
+        <div style={{fontSize:8,color:C.dgray,marginTop:1}}>{n.t}</div>
+      </div>
+      {n.album&&<AlbumArt color={n.album.color} size={23} radius={3}/>}
+    </div>)}
+    {!recDone&&a8&&<div style={{background:C.psoft,borderRadius:8,padding:"8px 10px",margin:"6px 0",border:`0.5px solid ${C.pink}22`}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+        <Avatar initials="TS" color={C.amber} size={23}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:10,color:C.white}}><b>@tom</b> recommended you an album</div>
+          <div style={{fontSize:10,color:C.pink,fontWeight:700,margin:"2px 0 1px"}}>Care For Me — Saba</div>
+          <div style={{fontSize:9,color:C.gray,fontStyle:"italic"}}>"this one is for you, trust aimen"</div>
+          <div style={{display:"flex",gap:6,marginTop:7}}>
+            <div onClick={()=>{setRecDone(true);onAlbum(a8);}} style={{background:C.pink,borderRadius:5,padding:"3px 10px",fontSize:9,fontWeight:700,color:C.white,textTransform:"uppercase",cursor:"pointer"}}>Rate it</div>
+            <div onClick={()=>setRecDone(true)} style={{background:"#222",borderRadius:5,padding:"3px 10px",fontSize:9,color:C.gray,cursor:"pointer"}}>Dismiss</div>
+          </div>
+        </div>
+      </div>
+    </div>}
+    <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"7px 0",borderBottom:`0.5px solid ${C.border}`}}>
+      <div style={{width:23,height:23,borderRadius:"50%",background:C.psoft,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>🔥</div>
+      <div style={{flex:1}}>
+        <div style={{fontSize:10,color:C.white,lineHeight:1.45}}>
+          <span style={{color:C.lgray}}>Your </span><span style={{color:C.pink}}>CTRL</span>
+          <span style={{color:C.lgray}}> review got </span><b>47 likes</b><span style={{color:C.lgray}}> — hot take!</span>
+        </div>
+        <div style={{fontSize:8,color:C.dgray,marginTop:1}}>3h ago</div>
+      </div>
+    </div>
+    <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"7px 0",borderBottom:`0.5px solid ${C.border}`}}>
+      <Avatar initials="LM" color={C.blue} size={23}/>
+      <div style={{flex:1}}>
+        <div style={{fontSize:10,color:C.white,lineHeight:1.45}}><b>@luna_m</b><span style={{color:C.lgray}}> started following you</span></div>
+        <div style={{fontSize:8,color:C.dgray,marginTop:1}}>1h ago</div>
+      </div>
+      <div style={{background:"#222",borderRadius:5,padding:"3px 9px",fontSize:9,color:C.lgray,fontWeight:700,cursor:"pointer"}}>Follow back</div>
+    </div>
+    <SectionHead>Earlier</SectionHead>
+    <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"7px 0",opacity:0.5}}>
+      <Avatar initials="ZW" color={C.blue} size={23}/>
+      <div style={{flex:1}}>
+        <div style={{fontSize:10,color:C.white}}><b>@zawwar</b><span style={{color:C.gray}}> rated </span><span style={{color:C.pink}}>Iceman</span><span style={{color:C.gray}}> — 8.2</span></div>
+        <div style={{fontSize:8,color:C.dgray,marginTop:1}}>Yesterday</div>
+      </div>
+    </div>
+    <div style={{height:14}}/>
+  </div>;
+}
+
+/* ─── PROFILE ─── */
+function ScreenProfile({albums,onAlbum,onShareCard,onSettings}){
+  const badges=[
+    {label:"The Contrarian",color:C.pink,icon:"🔥"},
+    {label:"R&B Soul",color:"#9d8fff",icon:"🌙"},
+    {label:"Indie Head",color:C.teal,icon:"🌿"},
+    {label:"Early Adopter",color:C.amber,icon:"⏰"},
+    {label:"Deep Cuts",color:C.blue,icon:"🔬"},
+    {label:"Harsh Critic",color:C.coral,icon:"⚔️"},
+  ];
+  const myRatings=albums.filter(a=>a.myScore!=null);
+  return <div style={{flex:1,overflowY:"auto",padding:"0 12px",background:C.bg}}>
+    <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 0 0"}}>
+      <div onClick={onSettings} style={{fontSize:18,color:C.gray,cursor:"pointer",padding:"4px"}}>⚙</div>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"4px 0 8px"}}>
+      <div style={{width:52,height:52,borderRadius:"50%",background:C.pink,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,fontWeight:700,color:C.white}}>J</div>
+      <div style={{fontSize:15,fontWeight:700,color:C.white}}>Jess</div>
+      <div style={{fontSize:10,color:C.gray}}>@jess · joined 2025</div>
+    </div>
+    <div style={{display:"flex",borderTop:`0.5px solid #222`,borderBottom:`0.5px solid #222`,padding:"7px 0",marginBottom:10}}>
+      {[[`${albums.filter(a=>a.myScore!=null).length}`,"Rated"],[`${myRatings.length}`,"Reviews"],["7.4","Avg"],["64","Friends"]].map(([n,l],i)=><div key={l}
+        style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:1,borderRight:i<3?`0.5px solid #222`:"none"}}>
+        <span style={{fontSize:14,fontWeight:700,color:C.white}}>{n}</span>
+        <span style={{fontSize:8,color:C.gray,textTransform:"uppercase",letterSpacing:"0.06em"}}>{l}</span>
+      </div>)}
+    </div>
+    <SectionHead>Taste profile</SectionHead>
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,margin:"5px 0 4px"}}>
+      {badges.map(b=><div key={b.label} style={{background:C.psoft,borderRadius:20,padding:"5px 10px",fontSize:10,fontWeight:700,color:b.color,display:"flex",alignItems:"center",gap:4}}>
+        <span style={{fontSize:11}}>{b.icon}</span>{b.label}
+      </div>)}
+    </div>
+    <div style={{fontSize:10,color:C.dgray,fontStyle:"italic",margin:"5px 0 10px"}}>"Rates 1.8 pts below avg · loves R&B & Indie · first to rate new drops"</div>
+    <SectionHead>Recent ratings</SectionHead>
+    {myRatings.map(a=><div key={a.id} onClick={()=>onAlbum(a)}
+      style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`0.5px solid #161616`,cursor:"pointer"}}>
+      <AlbumArt color={a.color} size={36} radius={5} album={a}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.white}}>{a.title}</div>
+        <div style={{fontSize:9,color:C.gray}}>{a.artist}</div>
+        {a.myReview&&<div style={{fontSize:9,color:C.dgray,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.myReview}</div>}
+      </div>
+      <Score value={a.myScore} size={14}/>
+    </div>)}
+    <div onClick={onShareCard} style={{background:C.psoft,borderRadius:9,padding:"9px 11px",margin:"12px 0 5px",cursor:"pointer"}}>
+      <div style={{fontSize:9,fontWeight:700,color:C.pink,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:2}}>Share your taste</div>
+      <div style={{fontSize:10,color:C.gray}}>Generate your top 3 card → Instagram / TikTok</div>
+    </div>
+    <div style={{height:14}}/>
+  </div>;
+}
+
+/* ─── FRIEND PROFILE ─── */
+const FRIEND_REVIEWS = [
+  {albumId:"blonde",    score:9.6, text:'"this album makes me feel things i cant explain. 9.6 and not a point more."', likes:284, albumTitle:"Blonde"},
+  {albumId:"tpab",      score:10.0,text:'"kendrick woke up and made the greatest rap album of all time. no notes."',   likes:197, albumTitle:"TPAB"},
+  {albumId:"ch-orange", score:9.1, text:'"channel orange is what summer sounds like. pyramid is underrated."',          likes:143, albumTitle:"channel ORANGE"},
+  {albumId:"ctrl",      score:8.8, text:'"drew barrymore is a top 5 song of the decade. the rest is just good."',      likes:98,  albumTitle:"CTRL"},
+  {albumId:"currents",  score:8.4, text:'"the less i know the better deserved the grammys. sound of clarity."',        likes:76,  albumTitle:"Currents"},
+  {albumId:"lemonade",  score:9.3, text:'"beyonce said let me make a movie and also the greatest album ever."',         likes:61,  albumTitle:"Lemonade"},
+];
+
+function ScreenFriendProfile({friend,albums,onBack,onAlbum,onFriend}){
+  const [following,setFollowing]=useState(true);
+  const [showAll,setShowAll]=useState(false);
+  const [liked,setLiked]=useState({});
+  const topReviews=FRIEND_REVIEWS.sort((a,b)=>b.likes-a.likes);
+  const visibleReviews=showAll?topReviews:topReviews.slice(0,3);
+
+  return <div style={{flex:1,overflowY:"auto",padding:"0 12px",background:C.bg}}>
+    <BackRow label="Back" onBack={onBack}/>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"8px 0"}}>
+      <Avatar initials={friend.initials} color={friend.color} size={52}/>
+      <div style={{fontSize:15,fontWeight:700,color:C.white}}>{friend.name}</div>
+      <div style={{fontSize:10,color:C.gray}}>{friend.handle} · joined 2024</div>
+      <div style={{display:"flex",gap:8,marginTop:5}}>
+        <div onClick={()=>setFollowing(!following)}
+          style={{background:following?C.pink:C.mid,borderRadius:8,padding:"6px 16px",
+            fontSize:10,fontWeight:700,color:following?C.white:C.lgray,cursor:"pointer"}}>
+          {following?"Following":"Follow"}
+        </div>
+        <div style={{background:C.mid,borderRadius:8,padding:"6px 16px",fontSize:10,fontWeight:700,color:C.lgray,cursor:"pointer"}}>Send rec</div>
+      </div>
+    </div>
+    <div style={{display:"flex",borderTop:`0.5px solid ${C.border}`,borderBottom:`0.5px solid ${C.border}`,padding:"6px 0",margin:"7px 0"}}>
+      {[["218","Rated"],["54","Reviews"],["8.1","Avg"],["89","Friends"]].map(([n,l],i)=><div key={l}
+        style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:1,
+          borderRight:i<3?`0.5px solid ${C.border}`:"none"}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.white}}>{n}</span>
+        <span style={{fontSize:7,color:C.gray,textTransform:"uppercase",letterSpacing:"0.06em"}}>{l}</span>
+      </div>)}
+    </div>
+    <SectionHead>Taste profile</SectionHead>
+    <div style={{display:"flex",flexWrap:"wrap",gap:5,margin:"5px 0 10px"}}>
+      {[["R&B Soul",C.pink],["Neo Soul","#9d8fff"],["The Optimist",C.teal],["Deep Cuts",C.blue]].map(([l,c])=><div key={l}
+        style={{background:C.psoft,borderRadius:20,padding:"4px 10px",fontSize:10,fontWeight:700,color:c}}>{l}</div>)}
+    </div>
+    {/* Most popular reviews first */}
+    <SectionHead action={showAll?"Show less":"See all"} onAction={()=>setShowAll(!showAll)}>
+      Top reviews · most liked
+    </SectionHead>
+    {visibleReviews.map((r,i)=>{
+      const album=albums.find(a=>a.id===r.albumId);
+      return <div key={i} style={{background:C.card,borderRadius:9,padding:"9px 10px",marginBottom:7}}>
+        {album&&<div onClick={()=>onAlbum(album)}
+          style={{display:"flex",alignItems:"center",gap:7,marginBottom:7,cursor:"pointer"}}>
+          <AlbumArt color={album.color} size={28} radius={4} album={album}/>
+          <div style={{flex:1,minWidth:0}}>
+            <span style={{fontSize:10,fontWeight:700,color:C.white}}>{r.albumTitle}</span>
+            <span style={{fontSize:9,color:C.gray}}> · {album.artist}</span>
+          </div>
+          <Score value={r.score} size={13}/>
+        </div>}
+        <div style={{fontSize:10,color:C.lgray,lineHeight:1.45,fontStyle:"italic"}}>{r.text}</div>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:6}}>
+          <span onClick={()=>setLiked(l=>({...l,[i]:!l[i]}))}
+            style={{color:liked[i]?C.pink:C.dgray,fontSize:15,cursor:"pointer",lineHeight:1}}>♥</span>
+          <span style={{fontSize:9,color:C.gray}}>{r.likes+(liked[i]?1:0)}</span>
+        </div>
+      </div>;
+    })}
+    {!showAll&&topReviews.length>3&&
+      <div onClick={()=>setShowAll(true)} style={{textAlign:"center",padding:"8px 0",
+        fontSize:10,color:C.pink,fontWeight:700,cursor:"pointer"}}>
+        See all {topReviews.length} reviews ↓
+      </div>}
+    <SectionHead>All ratings</SectionHead>
+    {albums.slice(0,8).map(a=><div key={a.id} onClick={()=>onAlbum(a)}
+      style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",
+        borderBottom:`0.5px solid ${C.border}`,cursor:"pointer"}}>
+      <AlbumArt color={a.color} size={36} radius={5} album={a}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.white}}>{a.title}</div>
+        <div style={{fontSize:9,color:C.gray}}>{a.artist}</div>
+      </div>
+      <Score value={+(7.5+Math.random()*2.4).toFixed(1)} size={13}/>
+    </div>)}
+    <div style={{height:14}}/>
+  </div>;
+}
+
+/* ─── ARTIST PAGE ─── */
+function ScreenArtist({artistMbid,artistName,onBack,onAlbum}){
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [tab,setTab]=useState("Albums");
+  const [artistImg,setArtistImg]=useState(null);
+  const [imgFailed,setImgFailed]=useState(false);
+
+  const colorFor=str=>{
+    const cols=["#533ab7","#1D9E75","#D85A30","#378ADD","#BA7517","#D4537E","#1a3a5c","#5a4080","#8a3060","#2a5a7a"];
+    let h=0;for(let i=0;i<(str||"").length;i++) h=(h*31+str.charCodeAt(i))&0xffff;
+    return cols[h%cols.length];
+  };
+
+  useEffect(()=>{
+    if(artistMbid&&API_BASE){
+      fetch(`${API_BASE}/api/artist/${artistMbid}`)
+        .then(r=>r.ok?r.json():null)
+        .then(d=>{setData(d);setLoading(false);})
+        .catch(()=>setLoading(false));
+    } else { setLoading(false); }
+    if(artistName&&API_BASE){
+      fetch(`${API_BASE}/api/artist-image?name=${encodeURIComponent(artistName)}`)
+        .then(r=>r.ok?r.json():null)
+        .then(d=>{if(d?.url) setArtistImg(d.url);})
+        .catch(()=>{});
+    }
+  },[artistMbid,artistName]);
+
+  const albums = data?.albums || [];
+  const singles = data?.singles || [];
+  const eps = data?.eps || [];
+  const tabs = ["Albums","Singles",...(eps.length>0?["EPs"]:[])];
+  const currentList = tab==="Albums"?albums:tab==="Singles"?singles:eps;
+
+  return <div style={{flex:1,display:"flex",flexDirection:"column",background:C.bg,overflow:"hidden"}}>
+    <div style={{flexShrink:0,padding:"0 12px",background:C.bg}}>
+      <BackRow label="Search" onBack={onBack}/>
+      <div style={{display:"flex",gap:14,alignItems:"center",paddingBottom:12,borderBottom:`0.5px solid #1e1e1e`}}>
+        <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",flexShrink:0,
+          background:colorFor(artistMbid||artistName),
+          display:"flex",alignItems:"center",justifyContent:"center",
+          fontSize:24,fontWeight:700,color:C.white}}>
+          {artistImg&&!imgFailed
+            ?<img src={artistImg} alt={artistName||""}
+               style={{width:"100%",height:"100%",objectFit:"cover"}}
+               onError={()=>setImgFailed(true)}/>
+            :(artistName||"?").slice(0,2).toUpperCase()}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:20,fontWeight:700,color:C.white,lineHeight:1.1}}>{artistName||data?.name||"Artist"}</div>
+          {data?.genre&&<div style={{fontSize:10,color:C.pink,marginTop:2,textTransform:"capitalize"}}>{data.genre}</div>}
+          {data?.country&&<div style={{fontSize:10,color:C.gray,marginTop:1}}>{data.country}</div>}
+          {!loading&&<div style={{fontSize:10,color:C.dgray,marginTop:4}}>
+            {albums.length} albums · {singles.length} singles{eps.length>0?` · ${eps.length} EPs`:""}
+          </div>}
+        </div>
+      </div>
+      <TabBar tabs={tabs} active={tab} onTab={setTab}/>
+    </div>
+
+    <div style={{flex:1,overflowY:"auto",padding:"0 12px"}}>
+      {loading&&<div style={{textAlign:"center",padding:"32px 0",color:C.gray}}>
+        <div style={{fontSize:24,marginBottom:8}}>⏳</div>
+        <div style={{fontSize:11}}>Loading from MusicBrainz...</div>
+      </div>}
+      {!loading&&currentList.length===0&&
+        <div style={{textAlign:"center",padding:"28px 0",color:C.gray,fontSize:11}}>
+          No {tab.toLowerCase()} found
+        </div>}
+      {!loading&&currentList.map((a,i)=>{
+        const obj={id:a.mbid,mbid:a.mbid,title:a.title,
+          artist:artistName||data?.name,year:a.year,
+          color:colorFor(a.mbid),coverUrl:null,avg:null,
+          myScore:null,myReview:"",ratings:0,tracks:a.tracks||0};
+        return <div key={i} onClick={()=>onAlbum(obj)}
+          style={{display:"flex",alignItems:"center",gap:11,padding:"9px 0",
+            borderBottom:`0.5px solid ${C.border}`,cursor:"pointer"}}>
+          <AlbumArt color={colorFor(a.mbid)} size={52} radius={6} album={obj}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.white}}>{a.title}</div>
+            <div style={{fontSize:9,color:C.gray}}>{a.year||"—"}</div>
+          </div>
+          {tab==="Singles"&&<div style={{background:C.mid,borderRadius:4,
+            padding:"2px 7px",fontSize:8,color:C.gray,flexShrink:0}}>Single</div>}
+          <span style={{fontSize:14,color:C.dgray}}>›</span>
+        </div>;
+      })}
+      <div style={{height:14}}/>
+    </div>
+  </div>;
+}
+
+/* ─── SETTINGS ─── */
+function ScreenSettings({onBack,themeMode,setThemeMode}){
+  const [pub,setPub]=useState(true);
+  const [srch,setSrch]=useState(true);
+  const [fn,setFn]=useState(true);
+  const [rn,setRn]=useState(true);
+  const [fln,setFln]=useState(false);
+  const Toggle=({on,set})=><div onClick={()=>set(!on)}
+    style={{width:34,height:18,background:on?C.pink:C.mid,borderRadius:9,position:"relative",cursor:"pointer",flexShrink:0,border:`0.5px solid ${C.border}`}}>
+    <div style={{position:"absolute",top:2.5,left:on?undefined:2.5,right:on?2.5:undefined,
+      width:13,height:13,background:on?C.white:C.gray,borderRadius:"50%",transition:"all 0.15s"}}/>
+  </div>;
+  const Row=({label,sub,right})=><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+    padding:"10px 12px",borderBottom:`0.5px solid ${C.border}`}}>
+    <div><div style={{fontSize:11,color:C.white}}>{label}</div>{sub&&<div style={{fontSize:9,color:C.gray,marginTop:1}}>{sub}</div>}</div>
+    {right}
+  </div>;
+  const ThemeBtn=({mode,label,icon})=><div onClick={()=>setThemeMode(mode)}
+    style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:8,cursor:"pointer",
+      background:themeMode===mode?C.pink:C.mid,border:themeMode===mode?`none`:`0.5px solid ${C.border}`}}>
+    <div style={{fontSize:16,marginBottom:2}}>{icon}</div>
+    <div style={{fontSize:9,fontWeight:700,color:themeMode===mode?C.white:C.gray}}>{label}</div>
+  </div>;
+  return <div style={{flex:1,overflowY:"auto",padding:"0 12px",background:C.bg}}>
+    <BackRow label="Profile" onBack={onBack}/>
+    <div style={{fontSize:16,fontWeight:700,color:C.white,marginBottom:12}}>Settings</div>
+    <SectionHead>Appearance</SectionHead>
+    <div style={{background:C.card,borderRadius:10,padding:"12px",marginBottom:10}}>
+      <div style={{fontSize:10,color:C.gray,marginBottom:8}}>Theme</div>
+      <div style={{display:"flex",gap:8}}>
+        <ThemeBtn mode="dark" label="Dark" icon="🌙"/>
+        <ThemeBtn mode="light" label="Light" icon="☀️"/>
+        <ThemeBtn mode="system" label="System" icon="⚙️"/>
+      </div>
+    </div>
+    <SectionHead>Account</SectionHead>
+    <div style={{background:C.card,borderRadius:10,overflow:"hidden",marginBottom:10}}>
+      <Row label="Username" right={<span style={{fontSize:10,color:C.gray}}>@jess</span>}/>
+      <Row label="Email" right={<span style={{fontSize:10,color:C.gray}}>jess@gmail.com</span>}/>
+      <Row label="Change password" right={<span style={{fontSize:14,color:C.dgray}}>›</span>}/>
+    </div>
+    <SectionHead>Privacy</SectionHead>
+    <div style={{background:C.card,borderRadius:10,overflow:"hidden",marginBottom:10}}>
+      <Row label="Public profile" sub="Anyone can see your ratings" right={<Toggle on={pub} set={setPub}/>}/>
+      <Row label="Show in search" sub="Let others find you" right={<Toggle on={srch} set={setSrch}/>}/>
+    </div>
+    <SectionHead>Notifications</SectionHead>
+    <div style={{background:C.card,borderRadius:10,overflow:"hidden",marginBottom:10}}>
+      <Row label="Friend activity" right={<Toggle on={fn} set={setFn}/>}/>
+      <Row label="Recommendations" right={<Toggle on={rn} set={setRn}/>}/>
+      <Row label="New followers" right={<Toggle on={fln} set={setFln}/>}/>
+    </div>
+    <div style={{background:C.card,borderRadius:10,overflow:"hidden",marginBottom:10}}>
+      <Row label="About" right={<span style={{fontSize:14,color:C.dgray}}>›</span>}/>
+      <div style={{padding:"10px 12px"}}><span style={{fontSize:11,color:"#E24B4A",fontWeight:700,cursor:"pointer"}}>Log out</span></div>
+    </div>
+    <div style={{height:14}}/>
+  </div>;
+}
+
+/* ─── MODALS ─── */
+function ModalRating({album,onClose,onSave}){
+  const [score,setScore]=useState(album.myScore??null);
+  const [review,setReview]=useState(album.myReview||"");
+  return <Modal onClose={onClose}>
+    <div style={{fontSize:14,fontWeight:700,color:C.white,marginBottom:14}}>{album.myScore!=null?"Update your rating":"Rate this album"}</div>
+    <div style={{display:"flex",gap:11,alignItems:"center",marginBottom:16}}>
+      <AlbumArt color={album.color} size={48} radius={7} album={album}/>
+      <div><div style={{fontSize:13,fontWeight:700,color:C.white}}>{album.title}</div><div style={{fontSize:10,color:C.gray}}>{album.artist} · {album.year}</div></div>
+    </div>
+    <RatingSlider value={score} onChange={setScore}/>
+    <div style={{marginTop:14,marginBottom:4}}>
+      <div style={{fontSize:9,fontWeight:700,color:C.gray,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:7}}>Your take (optional)</div>
+      <textarea value={review} onChange={e=>setReview(e.target.value.slice(0,200))}
+        placeholder='Drop a quip — "this album fixed my broken heart"'
+        style={{width:"100%",background:C.inputBg,border:`0.5px solid ${C.inputBorder}`,borderRadius:8,
+          padding:"9px 11px",fontSize:10,color:C.lgray,outline:"none",height:60,boxSizing:"border-box"}}/>
+      <div style={{fontSize:8,color:C.dgray,textAlign:"right",marginTop:3}}>{review.length}/200</div>
+    </div>
+    <div style={{fontSize:10,color:C.dgray,textAlign:"center",marginBottom:10}}>app average: {album.avg} · {album.ratings.toLocaleString()} ratings</div>
+    <div onClick={()=>score!=null&&onSave(score,review)}
+      style={{background:score!=null?C.pink:"#333",borderRadius:9,padding:"12px",textAlign:"center",
+        fontSize:11,fontWeight:700,color:score!=null?C.white:C.gray,textTransform:"uppercase",
+        letterSpacing:"0.08em",cursor:score!=null?"pointer":"default"}}>
+      {score!=null?(album.myScore!=null?"Update rating":"Log it"):"Drag slider to rate"}
+    </div>
+  </Modal>;
+}
+
+function ModalRecommend({album,onClose}){
+  const [sel,setSel]=useState(FRIENDS[0].id);
+  const [note,setNote]=useState("");
+  const [sent,setSent]=useState(false);
+  if(sent) return <Modal onClose={onClose}>
+    <div style={{textAlign:"center",padding:"20px 0"}}>
+      <div style={{fontSize:36,marginBottom:12}}>✉️</div>
+      <div style={{fontSize:15,fontWeight:700,color:C.white,marginBottom:7}}>Sent!</div>
+      <div style={{fontSize:11,color:C.gray}}>{FRIENDS.find(f=>f.id===sel)?.handle} will see your rec</div>
+      <div onClick={onClose} style={{background:C.pink,borderRadius:9,padding:"11px",marginTop:18,fontSize:11,fontWeight:700,color:C.white,cursor:"pointer"}}>Done</div>
+    </div>
+  </Modal>;
+  return <Modal onClose={onClose}>
+    <div style={{fontSize:13,fontWeight:700,color:C.white,marginBottom:11}}>Recommend to a friend</div>
+    <div style={{display:"flex",alignItems:"center",gap:9,background:C.mid,borderRadius:9,padding:"9px 11px",marginBottom:13}}>
+      <AlbumArt color={album.color} size={34} radius={5} album={album}/>
+      <div><div style={{fontSize:11,fontWeight:700,color:C.white}}>{album.title}</div><div style={{fontSize:9,color:C.gray}}>{album.artist}</div></div>
+    </div>
+    <div style={{fontSize:9,fontWeight:700,color:C.gray,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Send to</div>
+    {/* Horizontal scroll — fixed height so it never expands the modal */}
+    <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:10,marginBottom:13,
+      scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
+      {FRIENDS.map(f=><div key={f.id} onClick={()=>setSel(f.id)}
+        style={{flexShrink:0,width:58,display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+          background:sel===f.id?C.pdark:C.mid,border:sel===f.id?`1.5px solid ${C.pink}`:"1.5px solid transparent",
+          borderRadius:10,padding:"8px 4px",cursor:"pointer",transition:"all 0.15s"}}>
+        <Avatar initials={f.initials} color={f.color} size={28}/>
+        <span style={{fontSize:8,color:sel===f.id?C.pink:C.gray,fontWeight:700,
+          textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%",textAlign:"center"}}>{f.name}</span>
+        {sel===f.id&&<div style={{width:6,height:6,borderRadius:"50%",background:C.pink}}/>}
+      </div>)}
+    </div>
+    {sel&&<div style={{fontSize:10,color:C.lgray,textAlign:"center",marginBottom:10,marginTop:-6}}>
+      Sending to <span style={{color:C.pink,fontWeight:700}}>{FRIENDS.find(f=>f.id===sel)?.handle}</span>
+    </div>}
+    <textarea value={note} onChange={e=>setNote(e.target.value.slice(0,120))}
+      placeholder="Add a note... (optional)"
+      style={{width:"100%",background:C.mid,border:`0.5px solid #333`,borderRadius:8,
+        padding:"8px 10px",fontSize:10,color:C.lgray,outline:"none",marginBottom:13,height:50,boxSizing:"border-box"}}/>
+    <div onClick={()=>setSent(true)} style={{background:C.pink,borderRadius:9,padding:"12px",textAlign:"center",fontSize:11,fontWeight:700,color:C.white,cursor:"pointer",textTransform:"uppercase",letterSpacing:"0.08em"}}>Send recommendation</div>
+  </Modal>;
+}
+
+function ShareCardPreview({albums,label,variant}){
+  /* Always dark, regardless of app theme — cards are designed for dark */
+  const card_bg="#0a0a0a", card_text="#ffffff", card_sub="#888888";
+  const hotAlbum=albums.find(a=>a.myScore!=null&&a.avg!=null&&Math.abs(a.myScore-a.avg)>1.5);
+  const outlierAlbum=albums.find(a=>a.myScore!=null&&a.myScore>=9.0);
+  return <div style={{background:card_bg,borderRadius:13,padding:"15px 14px",border:"1px solid #2a2a2a"}}>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <span style={{fontSize:9,fontWeight:900,color:card_text,letterSpacing:"0.14em",textTransform:"uppercase"}}>GROOVELOG</span>
+      <span style={{fontSize:9,color:"#ff3cac",fontWeight:700}}>@jess</span>
+    </div>
+    {/* Title */}
+    <div style={{fontSize:11,fontWeight:900,color:card_text,textTransform:"uppercase",
+      letterSpacing:"0.12em",marginBottom:10,color:"#ff3cac"}}>{label}</div>
+    {/* Albums with art */}
+    {albums.map((a,i)=><div key={a.id} style={{display:"flex",alignItems:"center",gap:9,marginBottom:7}}>
+      <div style={{width:38,height:38,borderRadius:5,overflow:"hidden",flexShrink:0}}>
+        <AlbumArt color={a.color} size={38} radius={5} album={a}/>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:10,fontWeight:700,color:card_text,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.title}</div>
+        <div style={{fontSize:8,color:card_sub,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.artist}</div>
+      </div>
+      <div style={{display:"flex",alignItems:"baseline",gap:1,flexShrink:0}}>
+        <span style={{fontSize:13,fontWeight:700,color:"#ff3cac",fontFamily:"'Arial Black',Arial"}}>{a.myScore?.toFixed(1)}</span>
+        <span style={{fontSize:8,color:"#444"}}>/10</span>
+      </div>
+    </div>)}
+    {/* Badge */}
+    {variant==="hot"&&hotAlbum&&<div style={{background:"#1a0010",border:"0.5px solid #ff3cac44",
+      borderRadius:8,padding:"7px 9px",marginTop:6}}>
+      <div style={{fontSize:7,fontWeight:700,color:"#ff3cac",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>🔥 Hot take</div>
+      <div style={{fontSize:10,fontWeight:700,color:card_text,lineHeight:1.35}}>
+        I gave <span style={{color:"#ff3cac"}}>{hotAlbum.title}</span> a {hotAlbum.myScore?.toFixed(1)} —{" "}
+        world avg is {hotAlbum.avg}
+      </div>
+    </div>}
+    {variant==="outlier"&&outlierAlbum&&<div style={{background:"#0a0a1a",border:"0.5px solid #784aff44",
+      borderRadius:8,padding:"7px 9px",marginTop:6}}>
+      <div style={{fontSize:7,fontWeight:700,color:"#784aff",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:3}}>📡 Outlier</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontSize:10,fontWeight:700,color:card_text,lineHeight:1.35}}>
+          Your <span style={{color:"#784aff"}}>{outlierAlbum.myScore?.toFixed(1)}</span> on{" "}
+          {outlierAlbum.title.split(" ").slice(0,2).join(" ")}<br/>
+          puts you in the <span style={{color:"#784aff"}}>top 4%</span>
+        </div>
+        <div style={{fontSize:24,fontWeight:900,color:"#784aff",lineHeight:1}}>4%</div>
+      </div>
+    </div>}
+    <div style={{background:"#ff3cac",borderRadius:6,padding:"7px",marginTop:9,textAlign:"center",
+      fontSize:8,fontWeight:700,color:"#fff",textTransform:"uppercase",letterSpacing:"0.1em"}}>
+      rate yours → groovelog.app
+    </div>
+  </div>;
+}
+
+function ModalShareCard({albums:allAlbums,onClose}){
+  const [variant,setVariant]=useState("hot");
+  const [listType,setListType]=useState("alltime");
+
+  const rated=allAlbums.filter(a=>a.myScore!=null&&a.myScore>0);
+  const top2026=rated.filter(a=>a.year===2026).sort((a,b)=>b.myScore-a.myScore).slice(0,3);
+  const topAllTime=rated.sort((a,b)=>b.myScore-a.myScore).slice(0,3);
+  const cardAlbums=listType==="2026"?top2026:topAllTime;
+  const cardLabel=listType==="2026"?"My top 3 of 2026":"My top 3 albums";
+
+  return <Modal onClose={onClose}>
+    <div style={{fontSize:13,fontWeight:700,color:C.white,marginBottom:11}}>Your share card</div>
+    {/* List type selector */}
+    <div style={{fontSize:9,fontWeight:700,color:C.gray,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Card type</div>
+    <div style={{display:"flex",gap:6,marginBottom:11}}>
+      {[["alltime","🏆 All time"],["2026","📅 2026"]].map(([v,l])=>
+        <div key={v} onClick={()=>setListType(v)}
+          style={{flex:1,background:listType===v?C.pink:C.mid,borderRadius:8,padding:"7px 0",
+            textAlign:"center",fontSize:10,fontWeight:700,color:listType===v?C.white:C.gray,cursor:"pointer"}}>
+          {l}
+        </div>)}
+    </div>
+    {/* Badge selector */}
+    <div style={{fontSize:9,fontWeight:700,color:C.gray,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Badge</div>
+    <div style={{display:"flex",gap:6,marginBottom:11}}>
+      {[["hot","🔥 Hot take"],["outlier","📡 Outlier"],["none","Clean"]].map(([v,l])=>
+        <div key={v} onClick={()=>setVariant(v)}
+          style={{flex:1,background:variant===v?C.psoft:C.mid,
+            border:variant===v?`1px solid ${C.pink}`:"1px solid transparent",
+            borderRadius:8,padding:"7px 0",textAlign:"center",
+            fontSize:9,fontWeight:700,color:variant===v?C.pink:C.gray,cursor:"pointer"}}>
+          {l}
+        </div>)}
+    </div>
+    {/* Card preview */}
+    {cardAlbums.length===0
+      ?<div style={{textAlign:"center",padding:"20px 0",color:C.gray,fontSize:11}}>
+          {listType==="2026"?"No 2026 ratings yet — rate some albums first!":"Rate at least 1 album to generate your card"}
+        </div>
+      :<>
+        <ShareCardPreview albums={cardAlbums} label={cardLabel} variant={variant}/>
+        <div style={{display:"flex",gap:8,marginTop:11}}>
+          <div style={{flex:1,background:C.mid,borderRadius:9,padding:"10px",textAlign:"center",
+            fontSize:10,fontWeight:700,color:C.lgray,cursor:"pointer"}}>📋 Copy link</div>
+          <div style={{flex:1,background:"#1a1a2e",borderRadius:9,padding:"10px",textAlign:"center",
+            fontSize:10,fontWeight:700,color:"#9d8fff",cursor:"pointer"}}>📱 Instagram</div>
+          <div style={{flex:1,background:"#100010",borderRadius:9,padding:"10px",textAlign:"center",
+            fontSize:10,fontWeight:700,color:C.pink,cursor:"pointer"}}>🎵 TikTok</div>
+        </div>
+      </>}
+  </Modal>;
+}
+
+/* ─── ROOT APP ─── */
+function App(){
+  const [albums,setAlbums]=useState(ALL_ALBUMS);
+  const [songsState,setSongsState]=useState({});
+  const [feed,setFeed]=useState(INIT_FEED);
+  const [onboarded,setOnboarded]=useState(false);
+  const [onboardStep,setOnboardStep]=useState(0);
+  const [nav,setNav]=useState("home");
+  const [stack,setStack]=useState([]);
+  const [modal,setModal]=useState(null);
+  /* Theme — dark/light/system */
+  const [themeMode,setThemeMode]=useState("dark");
+  const prefersDark = window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const isDark = themeMode==="dark"||(themeMode==="system"&&prefersDark);
+  Object.assign(C, isDark ? DARK_THEME : LIGHT_THEME);
+
+  const push=(screen,props={})=>setStack(s=>[...s,{screen,props}]);
+  const pop=()=>setStack(s=>s.slice(0,-1));
+  const top=stack[stack.length-1];
+  const handleNav=key=>{setNav(key);setStack([]);setModal(null);};
+
+  /* 🔌 BACKEND: posts to API, always updates local state */
+  const saveRating=(album,score,review)=>{
+    const mbid=album.mbid||String(album.id);
+    postRating(mbid,'album',score,review); // fire & forget
+    setAlbums(prev=>prev.map(a=>a.id===album.id?{...a,myScore:score,myReview:review}:a));
+    setModal(null);
+  };
+
+  /* 🔌 BACKEND: posts song rating to API */
+  const saveSong=(album,updatedSong)=>{
+    const songMbid=updatedSong.mbid||String(updatedSong.id);
+    postRating(songMbid,'song',updatedSong.mine,updatedSong.myReview);
+    // Update under BOTH possible keys (string id and mbid) so it always hits
+    setSongsState(prev=>{
+      const key = album.id;
+      const existing=getSongs(key,prev);
+      const updated=existing.map(s=>s.id===updatedSong.id?updatedSong:s);
+      const next={...prev,[key]:updated};
+      if(album.mbid && album.mbid!==key) next[album.mbid]=updated;
+      return next;
+    });
+    pop();
+  };
+
+  /* 🔌 BACKEND HOOKUP: POST /api/feed/:id/comments */
+  const addComment=(feedId,text)=>{
+    setFeed(prev=>prev.map(item=>item.id===feedId
+      ?{...item,comments:[...item.comments,{id:Date.now(),friendId:0,text,time:"just now"}]}
+      :item));
+  };
+
+  const openAlbum=album=>{const fresh=albums.find(a=>a.id===album.id)||album;push("album",{album:fresh});};
+  const openSong=(song,album)=>push("song",{song,album});
+  const openFriend=friend=>push("friend",{friend});
+  const openArtist=(artistName,artistMbid)=>push("artist",{artistName,artistMbid:artistMbid||null});
+  const openSearch=()=>push("search");
+  const openRate=album=>setModal({type:"rate",album});
+  const openRec=album=>setModal({type:"rec",album});
+  const openShare=()=>setModal({type:"share"});
+  const openSettings=()=>push("settings");
+
+  const outerBg = isDark?"#111":"#d8d8da";
+  if(!onboarded) return <PhoneShell outerBg={outerBg}>
+    {onboardStep===0?<ScreenWelcome onNext={()=>setOnboardStep(1)}/>:<ScreenSeedTaste onDone={()=>setOnboarded(true)}/>}
+  </PhoneShell>;
+
+  const currentAlbum=top?.screen==="album"?(albums.find(a=>a.id===top.props.album.id)||top.props.album):null;
+
+  const renderScreen=()=>{
+    if(top) switch(top.screen){
+      case "album": return <ScreenAlbum album={currentAlbum} albums={albums} songsState={songsState}
+        onBack={pop} onSong={openSong} onRate={()=>openRate(currentAlbum)}
+        onRec={()=>openRec(currentAlbum)} onFriend={openFriend}
+        onEditReview={()=>openRate(currentAlbum)}
+        onArtist={name=>openArtist(name,null)}/>;
+      case "song": {
+        const freshSong=getSongs(top.props.album.id,songsState).find(s=>s.id===top.props.song.id)||top.props.song;
+        return <ScreenSong song={freshSong} album={top.props.album} onBack={pop}
+          onSaveSong={s=>saveSong(top.props.album,s)}/>;
+      }
+      case "friend": return <ScreenFriendProfile friend={top.props.friend} albums={albums} onBack={pop} onAlbum={openAlbum} onFriend={openFriend}/>;
+      case "search": return <ScreenSearch albums={albums} onBack={pop}
+        onAlbum={a=>{ pop(); if(a.isArtist) push("artist",{artistMbid:a.mbid,artistName:a.title}); else openAlbum(a); }}
+        onArtist={(mbid,name)=>push("artist",{artistMbid:mbid,artistName:name})}/>;
+      case "artist": return <ScreenArtist artistMbid={top.props.artistMbid} artistName={top.props.artistName}
+        onBack={pop} onAlbum={openAlbum}/>;
+      case "settings": return <ScreenSettings onBack={pop} themeMode={themeMode} setThemeMode={setThemeMode}/>;
+      default: return null;
+    }
+    switch(nav){
+      case "home": return <ScreenHome albums={albums} feed={feed} onAlbum={openAlbum} onSearch={openSearch} onFriend={openFriend} onUpdateFeed={addComment}/>;
+      case "explore": return <ScreenExplore albums={albums} onAlbum={openAlbum}/>;
+      case "activity": return <ScreenActivity albums={albums} onAlbum={openAlbum} onFriend={openFriend}/>;
+      case "profile": return <ScreenProfile albums={albums} onAlbum={openAlbum} onShareCard={openShare} onSettings={openSettings}/>;
+      default: return null;
+    }
+  };
+
+  return <PhoneShell outerBg={outerBg}>
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",position:"relative"}}>
+      {renderScreen()}
+      {modal?.type==="rate"&&<ModalRating album={modal.album} onClose={()=>setModal(null)} onSave={(s,r)=>saveRating(modal.album,s,r)}/>}
+      {modal?.type==="rec"&&<ModalRecommend album={modal.album} onClose={()=>setModal(null)}/>}
+      {modal?.type==="share"&&<ModalShareCard albums={albums} onClose={()=>setModal(null)}/>}
+    </div>
+    <NavBar active={nav} onNav={handleNav}/>
+  </PhoneShell>;
+}
+
+function PhoneShell({children}){
+  return <div style={{width:"100vw",height:"100vh",background:"#111",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div className="phone-shell" style={{width:390,height:844,background:C.bg,borderRadius:44,border:"2.5px solid #333",
+      overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 40px 100px rgba(0,0,0,0.7)",position:"relative"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+        padding:"14px 22px 6px",flexShrink:0,background:C.bg}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.white}}>9:41</span>
+        <div style={{width:110,height:8,background:"#111",borderRadius:4}}/>
+        <span style={{fontSize:10,color:C.white,letterSpacing:2}}>▲ ● ■</span>
+      </div>
+      {children}
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
