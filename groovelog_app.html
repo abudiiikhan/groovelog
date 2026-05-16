@@ -200,7 +200,7 @@ const SONG_REVIEWS = [
    
    To enable: change null to 'http://localhost:3001'
    ─────────────────────────────────────────────────────────── */
-const API_BASE = 'https://groovelog-production.up.railway.app'; // connected to local backend
+const API_BASE = 'http://localhost:3001'; // connected to local backend
 
 async function api(path, opts={}) {
   if (!API_BASE) return null;
@@ -267,8 +267,12 @@ function CoverArt({ album, size=44, radius=6 }) {
 /* ─── HELPERS ─── */
 const px = v=>`${v}px`;
 const getSongs = (albumId,songsState)=>{
-  const custom = songsState?.[albumId];
-  if(custom) return custom;
+  // Check all possible keys — album string id, numeric id, mbid
+  if(songsState){
+    for(const key of [albumId, String(albumId)]){
+      if(songsState[key]) return songsState[key];
+    }
+  }
   const base = SONGS_DATA[albumId];
   if(base) return base;
   const album = ALL_ALBUMS.find(a=>a.id===albumId||a.mbid===albumId);
@@ -476,51 +480,53 @@ const SEED_GENRES = [
 
 function ScreenSeedTaste({onDone}){
   const [sel,setSel]=useState([]);
-  const [activeGenre,setActiveGenre]=useState(0);
   const toggle=id=>setSel(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
-  const genreAlbums=ALL_ALBUMS.filter(a=>SEED_GENRES[activeGenre].genres.includes(a.genre)).slice(0,12);
   return <div style={{flex:1,display:"flex",flexDirection:"column",background:C.bg,overflow:"hidden"}}>
-    <div style={{padding:"14px 14px 0",flexShrink:0}}>
+    <div style={{padding:"16px 14px 8px",flexShrink:0}}>
       <div style={{fontSize:16,fontWeight:700,color:C.white,marginBottom:3}}>What do you listen to?</div>
-      <div style={{fontSize:11,color:C.gray,marginBottom:12}}>Pick at least 5 albums you love to seed your feed</div>
-      {/* Genre tabs */}
-      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:10}}>
-        {SEED_GENRES.map((g,i)=><div key={i} onClick={()=>setActiveGenre(i)}
-          style={{flexShrink:0,background:activeGenre===i?C.pink:C.psoft,
-            border:`0.5px solid ${activeGenre===i?C.pink:C.pink+"33"}`,
-            borderRadius:20,padding:"5px 12px",fontSize:10,fontWeight:700,
-            color:activeGenre===i?C.white:C.pink,cursor:"pointer"}}>{g.label}</div>)}
-      </div>
+      <div style={{fontSize:11,color:C.gray}}>Pick at least 5 albums you love to seed your feed</div>
     </div>
-    {/* Album grid — scrollable */}
+    {/* Vertical scroll — categories stacked */}
     <div style={{flex:1,overflowY:"auto",padding:"0 14px"}}>
-      <div style={{display:"flex",flexWrap:"wrap",gap:10,paddingBottom:8}}>
-        {genreAlbums.map(a=>{
-          const on=sel.includes(a.id);
-          return <div key={a.id} onClick={()=>toggle(a.id)} style={{width:80,cursor:"pointer"}}>
-            <div style={{position:"relative",width:80,height:80,borderRadius:9,overflow:"hidden",
-              border:on?`2.5px solid ${C.pink}`:"2px solid #2a2a2a",boxSizing:"border-box"}}>
-              <AlbumArt color={a.color} size={80} radius={7} album={a}/>
-              {on&&<div style={{position:"absolute",inset:0,background:"rgba(255,60,172,0.25)",
-                display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <div style={{width:22,height:22,background:C.pink,borderRadius:"50%",
-                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:C.white,fontWeight:700}}>✓</div>
-              </div>}
-            </div>
-            <div style={{fontSize:9,color:C.white,fontWeight:600,marginTop:4,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.title}</div>
-            <div style={{fontSize:8,color:C.gray,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.artist}</div>
-          </div>;
-        })}
-      </div>
+      {SEED_GENRES.map((genre,gi)=>{
+        const genreAlbums=ALL_ALBUMS.filter(a=>genre.genres.includes(a.genre));
+        if(!genreAlbums.length) return null;
+        return <div key={gi} style={{marginBottom:18}}>
+          <div style={{fontSize:12,fontWeight:700,color:C.pink,marginBottom:8,
+            textTransform:"uppercase",letterSpacing:"0.1em"}}>{genre.label}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+            {genreAlbums.map(a=>{
+              const on=sel.includes(a.id);
+              return <div key={a.id} onClick={()=>toggle(a.id)} style={{width:80,cursor:"pointer"}}>
+                <div style={{position:"relative",width:80,height:80,borderRadius:9,overflow:"hidden",
+                  border:on?`2.5px solid ${C.pink}`:"2px solid transparent",boxSizing:"border-box"}}>
+                  <AlbumArt color={a.color} size={80} radius={7} album={a}/>
+                  {on&&<div style={{position:"absolute",inset:0,background:"rgba(255,60,172,0.25)",
+                    display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <div style={{width:22,height:22,background:C.pink,borderRadius:"50%",
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:13,color:C.white,fontWeight:700}}>✓</div>
+                  </div>}
+                </div>
+                <div style={{fontSize:8,color:C.white,fontWeight:600,marginTop:4,overflow:"hidden",
+                  whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.title}</div>
+                <div style={{fontSize:7,color:C.gray,overflow:"hidden",whiteSpace:"nowrap",
+                  textOverflow:"ellipsis"}}>{a.artist}</div>
+              </div>;
+            })}
+          </div>
+        </div>;
+      })}
+      <div style={{height:80}}/>
     </div>
-    {/* Footer */}
-    <div style={{padding:"10px 14px 16px",flexShrink:0,borderTop:`0.5px solid #1e1e1e`,background:C.bg}}>
+    {/* Sticky footer */}
+    <div style={{padding:"10px 14px 16px",flexShrink:0,borderTop:`0.5px solid ${C.border}`,background:C.bg}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <div style={{width:9,height:9,borderRadius:"50%",background:sel.length>=5?C.pink:C.gray}}/>
           <div style={{fontSize:10,color:C.lgray}}>{sel.length} selected{sel.length<5?` — ${5-sel.length} more to go`:" — ready!"}</div>
         </div>
-        <div style={{fontSize:10,color:C.gray}}>Browse all genres above ↑</div>
+        <div style={{fontSize:10,color:C.gray}}>scroll to browse ↑</div>
       </div>
       <div onClick={sel.length>=5?onDone:null}
         style={{background:sel.length>=5?C.pink:"#2a2a2a",borderRadius:11,padding:"13px",
@@ -532,12 +538,16 @@ function ScreenSeedTaste({onDone}){
   </div>;
 }
 
+
 /* ─── HOME ─── */
 function ScreenHome({albums,feed,onAlbum,onSearch,onFriend,onUpdateFeed}){
   const [openComments,setOpenComments]=useState(null);
   const [reacted,setReacted]=useState({});
   const emojiMap={fire:"🔥",cry:"😭",target:"🎯",skull:"💀",handshake:"🤝"};
   const trending=albums.filter(a=>a.trending);
+  const removeFromList=(albumId)=>{
+    setSavedList(prev=>prev.filter(id=>id!==albumId));
+  };
   const addComment=(feedId,text)=>{
     onUpdateFeed(feedId,text);
   };
@@ -750,6 +760,54 @@ function randomColor(str){
   return colors[h%colors.length];
 }
 
+/* ─── FRIEND REVIEW CARD (interactive reactions + comment thread) ─── */
+function FriendReviewCard({fi,fr}){
+  const emojiMap={fire:"🔥",cry:"😭",target:"🎯",skull:"💀",handshake:"🤝"};
+  const [reactions,setReactions]=useState(fi.reactions);
+  const [myReacts,setMyReacts]=useState({});
+  const [comments,setComments]=useState(fi.comments);
+  const [showComments,setShowComments]=useState(false);
+  const toggleReact=(k)=>{
+    const on=myReacts[k];
+    setMyReacts(r=>({...r,[k]:!on}));
+    setReactions(r=>({...r,[k]:(r[k]||0)+(on?-1:1)}));
+  };
+  return <div style={{padding:"6px 0",borderBottom:`0.5px solid ${C.border}`}}>
+    <div style={{display:"flex",alignItems:"flex-start",gap:7}}>
+      <Avatar initials={fr.initials} color={fr.color} size={21}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+          <span style={{fontSize:10,fontWeight:700,color:C.white}}>{fr.handle}</span>
+          <span style={{fontSize:9,color:C.dgray}}>·</span>
+          <span style={{fontSize:10,fontWeight:700,color:C.pink}}>{fi.score}</span>
+        </div>
+        <div style={{fontSize:10,color:"#aaa",lineHeight:1.4}}>{fi.text}</div>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:5,flexWrap:"wrap"}}>
+          {Object.entries(reactions).map(([k,v])=>{
+            const on=myReacts[k];
+            return <div key={k} onClick={()=>toggleReact(k)}
+              style={{background:on?C.pdark:C.mid,border:`0.5px solid ${on?C.pink:"transparent"}`,
+                borderRadius:20,padding:"2px 7px",fontSize:8,
+                color:on?C.pink:"#777",cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
+              {emojiMap[k]} {v}
+            </div>;
+          })}
+          <div onClick={()=>setShowComments(!showComments)}
+            style={{background:showComments?C.pdark:C.mid,border:`0.5px solid ${showComments?C.pink:"transparent"}`,
+              borderRadius:20,padding:"2px 7px",fontSize:8,
+              color:showComments?C.pink:"#777",cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
+            💬 {comments.length}
+          </div>
+        </div>
+      </div>
+    </div>
+    {showComments&&<div style={{marginLeft:28,marginTop:6}}>
+      <CommentThread comments={comments}
+        onAdd={text=>setComments(c=>[...c,{id:Date.now(),friendId:0,text,time:"just now"}])}/>
+    </div>}
+  </div>;
+}
+
 /* ─── ALBUM ─── */
 function ScreenAlbum({album,albums,songsState,onBack,onSong,onRate,onRec,onFriend,onEditReview,onSaveAlbum,onArtist}){
   const [tab,setTab]=useState("Reviews");
@@ -856,25 +914,7 @@ function ScreenAlbum({album,albums,songsState,onBack,onSong,onRate,onRec,onFrien
           {feedForAlbum.map((fi,i)=>{
             const fr=FRIENDS.find(f=>f.id===fi.friendId);
             if(!fr) return null;
-            return <div key={i} style={{padding:"5px 0",borderBottom:`0.5px solid ${C.border}`}}>
-              <div style={{display:"flex",alignItems:"flex-start",gap:7}}>
-                <Avatar initials={fr.initials} color={fr.color} size={21}/>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
-                    <span style={{fontSize:10,fontWeight:700,color:C.white}}>{fr.handle}</span>
-                    <span style={{fontSize:9,color:C.dgray}}>·</span>
-                    <span style={{fontSize:10,fontWeight:700,color:C.pink}}>{fi.score}</span>
-                  </div>
-                  <div style={{fontSize:10,color:"#aaa",lineHeight:1.4}}>{fi.text}</div>
-                  <div style={{display:"flex",gap:4,marginTop:4}}>
-                    {Object.entries(fi.reactions).slice(0,2).map(([k,v])=><div key={k}
-                      style={{background:C.pdark,borderRadius:20,padding:"2px 6px",fontSize:8,color:C.pink}}>
-                      {{fire:"🔥",cry:"😭",target:"🎯",skull:"💀",handshake:"🤝"}[k]} {v}</div>)}
-                    <span style={{fontSize:8,color:C.gray}}>💬 {fi.comments.length}</span>
-                  </div>
-                </div>
-              </div>
-            </div>;
+            return <FriendReviewCard key={i} fi={fi} fr={fr}/>;
           })}
         </>}
         <FeedDivider label="everyone else"/>
@@ -954,16 +994,15 @@ function ScreenSong({song,album,onBack,onSaveSong}){
   const [comments,setComments]=useState([
     {id:1,friendId:1,text:"this one hits different at night",time:"2h ago"},
   ]);
-  const hasChanges=score!==song.mine||review!==song.myReview;
   const save=()=>{
     if(score===null) return;
-    onSaveSong({...song,mine:score,myReview:review});
+    onSaveSong({...song, mine:parseFloat(score.toFixed(1)), myReview:review.trim()});
   };
   return <div style={{flex:1,display:"flex",flexDirection:"column",background:C.bg,overflow:"hidden"}}>
     <div style={{flexShrink:0,padding:"0 12px",background:C.bg}}>
       <BackRow label={`${album.title} — Tracklist`} onBack={onBack}/>
       <div style={{display:"flex",gap:10,alignItems:"center",paddingBottom:10}}>
-        <AlbumArt color={album.color} size={46} radius={6}/>
+        <AlbumArt color={album.color} size={46} radius={6} album={album}/>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:13,fontWeight:700,color:C.white}}>{song.title}</div>
           <div style={{fontSize:9,color:C.gray,marginBottom:4}}>{album.title} · {album.artist}</div>
@@ -996,7 +1035,7 @@ function ScreenSong({song,album,onBack,onSaveSong}){
           style={{background:score!=null?C.pink:"#333",borderRadius:9,padding:"12px",
             textAlign:"center",fontSize:11,fontWeight:700,color:score!=null?C.white:C.gray,
             textTransform:"uppercase",letterSpacing:"0.08em",cursor:score!=null?"pointer":"default",marginBottom:12}}>
-          {score!=null?(song.mine!=null?"Update rating":"Log this track"):"Drag slider to rate"}
+          {score!=null?(song.mine!=null?"Update · "+score.toFixed(1):"Log this track"):"Drag slider to rate"}
         </div>
       </>}
       {tab==="Reviews"&&<>
@@ -1028,7 +1067,7 @@ function ScreenSong({song,album,onBack,onSaveSong}){
 }
 
 /* ─── EXPLORE ─── */
-function ScreenExplore({albums,onAlbum}){
+function ScreenExplore({albums,onAlbum,savedList=[],onSave}){
   const [tab,setTab]=useState("For you");
   const [dismissed,setDismissed]=useState([]);
   const recRaw=[
@@ -1121,7 +1160,13 @@ function ScreenExplore({albums,onAlbum}){
             <div style={{fontSize:10,color:"#aaa",fontStyle:"italic",marginBottom:8}}>{r.note}</div>
             <div style={{display:"flex",gap:7}}>
               <div onClick={()=>onAlbum(album)} style={{flex:1,background:C.pink,borderRadius:7,padding:"6px 0",textAlign:"center",fontSize:10,fontWeight:700,color:C.white,textTransform:"uppercase",cursor:"pointer"}}>Rate it</div>
-              <div style={{flex:1,background:C.mid,borderRadius:7,padding:"6px 0",textAlign:"center",fontSize:10,fontWeight:700,color:C.gray,textTransform:"uppercase",cursor:"pointer"}}>Save</div>
+              <div onClick={()=>onSave&&onSave(album.id)}
+                style={{flex:1,background:savedList?.includes(album.id)?C.psoft:C.mid,
+                  border:`0.5px solid ${savedList?.includes(album.id)?C.pink:"transparent"}`,
+                  borderRadius:7,padding:"6px 0",textAlign:"center",fontSize:10,fontWeight:700,
+                  color:savedList?.includes(album.id)?C.pink:C.gray,textTransform:"uppercase",cursor:"pointer"}}>
+                {savedList?.includes(album.id)?"✓ Saved":"Save"}
+              </div>
               <div onClick={()=>setDismissed(d=>[...d,r.origIdx])} style={{flex:1,background:C.mid,borderRadius:7,padding:"6px 0",textAlign:"center",fontSize:10,fontWeight:700,color:C.gray,textTransform:"uppercase",cursor:"pointer"}}>Dismiss</div>
             </div>
           </div>;
@@ -1198,7 +1243,7 @@ function ScreenActivity({albums,onAlbum,onFriend}){
 }
 
 /* ─── PROFILE ─── */
-function ScreenProfile({albums,onAlbum,onShareCard,onSettings}){
+function ScreenProfile({albums,onAlbum,onShareCard,onSettings,savedList=[],onRemove}){
   const badges=[
     {label:"The Contrarian",color:C.pink,icon:"🔥"},
     {label:"R&B Soul",color:"#9d8fff",icon:"🌙"},
@@ -1231,6 +1276,25 @@ function ScreenProfile({albums,onAlbum,onShareCard,onSettings}){
       </div>)}
     </div>
     <div style={{fontSize:10,color:C.dgray,fontStyle:"italic",margin:"5px 0 10px"}}>"Rates 1.8 pts below avg · loves R&B & Indie · first to rate new drops"</div>
+    {savedList?.length>0&&<>
+      <SectionHead>On my list 📝</SectionHead>
+      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:8,marginBottom:4}}>
+        {savedList.map(id=>{
+          const a=albums.find(x=>x.id===id);
+          if(!a) return null;
+          return <div key={id} onClick={()=>onAlbum(a)}
+            style={{flexShrink:0,width:64,cursor:"pointer",position:"relative"}}>
+            <AlbumArt color={a.color} size={64} radius={7} album={a}/>
+            <div onClick={e=>{e.stopPropagation();onRemove&&onRemove(id);}}
+              style={{position:"absolute",top:-4,right:-4,width:16,height:16,background:"#333",
+                borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:8,color:"#aaa",cursor:"pointer"}}>✕</div>
+            <div style={{fontSize:8,color:C.white,fontWeight:600,marginTop:3,overflow:"hidden",
+              whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{a.title}</div>
+          </div>;
+        })}
+      </div>
+    </>}
     <SectionHead>Recent ratings</SectionHead>
     {myRatings.map(a=><div key={a.id} onClick={()=>onAlbum(a)}
       style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`0.5px solid #161616`,cursor:"pointer"}}>
@@ -1346,6 +1410,7 @@ function ScreenArtist({artistMbid,artistName,onBack,onAlbum}){
   const [tab,setTab]=useState("Albums");
   const [artistImg,setArtistImg]=useState(null);
   const [imgFailed,setImgFailed]=useState(false);
+  const [resolvedMbid,setResolvedMbid]=useState(artistMbid||null);
 
   const colorFor=str=>{
     const cols=["#533ab7","#1D9E75","#D85A30","#378ADD","#BA7517","#D4537E","#1a3a5c","#5a4080","#8a3060","#2a5a7a"];
@@ -1354,34 +1419,62 @@ function ScreenArtist({artistMbid,artistName,onBack,onAlbum}){
   };
 
   useEffect(()=>{
-    if(artistMbid&&API_BASE){
-      fetch(`${API_BASE}/api/artist/${artistMbid}`)
-        .then(r=>r.ok?r.json():null)
-        .then(d=>{setData(d);setLoading(false);})
-        .catch(()=>setLoading(false));
-    } else { setLoading(false); }
-    if(artistName&&API_BASE){
+    if(!API_BASE){ setLoading(false); return; }
+    const load=async()=>{
+      let mbid=artistMbid;
+      // Search for artist MBID by name if not provided
+      if(!mbid && artistName){
+        try{
+          // Try exact name search first
+          const r=await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(artistName)}&type=artist&limit=5`);
+          if(r.ok){
+            const d=await r.json();
+            // Pick highest score result
+            const best=d?.results?.sort((a,b)=>(b.score||0)-(a.score||0))?.[0];
+            mbid=best?.mbid||null;
+            if(mbid) setResolvedMbid(mbid);
+          }
+        } catch(e){ console.log('artist search error:',e); }
+      }
+      if(!mbid){
+        console.log('No MBID found for artist:',artistName);
+        setLoading(false);
+        return;
+      }
+      try{
+        const r=await fetch(`${API_BASE}/api/artist/${mbid}`);
+        if(r.ok){
+          const d=await r.json();
+          setData(d);
+        }
+      } catch(e){ console.log('artist fetch error:',e); }
+      setLoading(false);
+    };
+    load();
+    // Wikipedia photo — non-blocking
+    if(artistName && API_BASE){
       fetch(`${API_BASE}/api/artist-image?name=${encodeURIComponent(artistName)}`)
         .then(r=>r.ok?r.json():null)
-        .then(d=>{if(d?.url) setArtistImg(d.url);})
+        .then(d=>{if(d?.url)setArtistImg(d.url);})
         .catch(()=>{});
     }
   },[artistMbid,artistName]);
 
-  const albums = data?.albums || [];
-  const singles = data?.singles || [];
-  const eps = data?.eps || [];
-  const tabs = ["Albums","Singles",...(eps.length>0?["EPs"]:[])];
-  const currentList = tab==="Albums"?albums:tab==="Singles"?singles:eps;
+  const albums=data?.albums||[];
+  const singles=data?.singles||[];
+  const eps=data?.eps||[];
+  const tabs=["Albums","Singles",...(eps.length>0?["EPs"]:[])];
+  const currentList=tab==="Albums"?albums:tab==="Singles"?singles:eps;
 
   return <div style={{flex:1,display:"flex",flexDirection:"column",background:C.bg,overflow:"hidden"}}>
     <div style={{flexShrink:0,padding:"0 12px",background:C.bg}}>
-      <BackRow label="Search" onBack={onBack}/>
-      <div style={{display:"flex",gap:14,alignItems:"center",paddingBottom:12,borderBottom:`0.5px solid #1e1e1e`}}>
+      <BackRow label="Back" onBack={onBack}/>
+      <div style={{display:"flex",gap:14,alignItems:"center",paddingBottom:12,
+        borderBottom:`0.5px solid ${C.border}`}}>
         <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",flexShrink:0,
-          background:colorFor(artistMbid||artistName),
+          background:colorFor(resolvedMbid||artistName),
           display:"flex",alignItems:"center",justifyContent:"center",
-          fontSize:24,fontWeight:700,color:C.white}}>
+          fontSize:24,fontWeight:700,color:"#fff"}}>
           {artistImg&&!imgFailed
             ?<img src={artistImg} alt={artistName||""}
                style={{width:"100%",height:"100%",objectFit:"cover"}}
@@ -1399,13 +1492,18 @@ function ScreenArtist({artistMbid,artistName,onBack,onAlbum}){
       </div>
       <TabBar tabs={tabs} active={tab} onTab={setTab}/>
     </div>
-
     <div style={{flex:1,overflowY:"auto",padding:"0 12px"}}>
       {loading&&<div style={{textAlign:"center",padding:"32px 0",color:C.gray}}>
         <div style={{fontSize:24,marginBottom:8}}>⏳</div>
-        <div style={{fontSize:11}}>Loading from MusicBrainz...</div>
+        <div style={{fontSize:11}}>Loading artist from MusicBrainz...</div>
       </div>}
-      {!loading&&currentList.length===0&&
+      {!loading&&!data&&
+        <div style={{textAlign:"center",padding:"28px 0",color:C.gray,fontSize:11}}>
+          <div style={{fontSize:20,marginBottom:8}}>🔍</div>
+          <div>Could not find artist data</div>
+          <div style={{fontSize:9,color:C.dgray,marginTop:4}}>Try searching for them in the Search tab</div>
+        </div>}
+      {!loading&&data&&currentList.length===0&&
         <div style={{textAlign:"center",padding:"28px 0",color:C.gray,fontSize:11}}>
           No {tab.toLowerCase()} found
         </div>}
@@ -1431,6 +1529,7 @@ function ScreenArtist({artistMbid,artistName,onBack,onAlbum}){
     </div>
   </div>;
 }
+
 
 /* ─── SETTINGS ─── */
 function ScreenSettings({onBack,themeMode,setThemeMode}){
@@ -1678,6 +1777,7 @@ function App(){
   const [albums,setAlbums]=useState(ALL_ALBUMS);
   const [songsState,setSongsState]=useState({});
   const [feed,setFeed]=useState(INIT_FEED);
+  const [savedList,setSavedList]=useState([]); // "On my list" — albums saved from recs
   const [onboarded,setOnboarded]=useState(false);
   const [onboardStep,setOnboardStep]=useState(0);
   const [nav,setNav]=useState("home");
@@ -1706,19 +1806,31 @@ function App(){
   const saveSong=(album,updatedSong)=>{
     const songMbid=updatedSong.mbid||String(updatedSong.id);
     postRating(songMbid,'song',updatedSong.mine,updatedSong.myReview);
-    // Update under BOTH possible keys (string id and mbid) so it always hits
     setSongsState(prev=>{
-      const key = album.id;
-      const existing=getSongs(key,prev);
-      const updated=existing.map(s=>s.id===updatedSong.id?updatedSong:s);
-      const next={...prev,[key]:updated};
-      if(album.mbid && album.mbid!==key) next[album.mbid]=updated;
+      // Save under every possible album key so lookup always finds it
+      const keys=[album.id, album.mbid, String(album.id)].filter(Boolean);
+      const next={...prev};
+      keys.forEach(key=>{
+        const existing=getSongs(key,prev);
+        // Match by position id (integer) OR by mbid string
+        const updated=existing.map(s=>
+          (s.id===updatedSong.id || s.mbid===updatedSong.mbid)
+            ? updatedSong : s
+        );
+        next[key]=updated;
+      });
       return next;
     });
     pop();
   };
 
   /* 🔌 BACKEND HOOKUP: POST /api/feed/:id/comments */
+  const saveToList=(albumId)=>{
+    setSavedList(prev=>prev.includes(albumId)?prev:[...prev,albumId]);
+  };
+  const removeFromList=(albumId)=>{
+    setSavedList(prev=>prev.filter(id=>id!==albumId));
+  };
   const addComment=(feedId,text)=>{
     setFeed(prev=>prev.map(item=>item.id===feedId
       ?{...item,comments:[...item.comments,{id:Date.now(),friendId:0,text,time:"just now"}]}
@@ -1750,7 +1862,21 @@ function App(){
         onEditReview={()=>openRate(currentAlbum)}
         onArtist={name=>openArtist(name,null)}/>;
       case "song": {
-        const freshSong=getSongs(top.props.album.id,songsState).find(s=>s.id===top.props.song.id)||top.props.song;
+        // Look up the fresh song state across all possible album keys
+        const albumId = top.props.album.id;
+        const albumMbid = top.props.album.mbid;
+        const songId = top.props.song.id;
+        const songMbid = top.props.song.mbid;
+        // Try to find updated song from songsState under any key
+        let freshSong = null;
+        for(const key of [albumId, albumMbid, String(albumId)].filter(Boolean)){
+          const arr = songsState[key];
+          if(arr){
+            freshSong = arr.find(s=>s.id===songId||(songMbid&&s.mbid===songMbid));
+            if(freshSong) break;
+          }
+        }
+        freshSong = freshSong || top.props.song;
         return <ScreenSong song={freshSong} album={top.props.album} onBack={pop}
           onSaveSong={s=>saveSong(top.props.album,s)}/>;
       }
@@ -1765,9 +1891,9 @@ function App(){
     }
     switch(nav){
       case "home": return <ScreenHome albums={albums} feed={feed} onAlbum={openAlbum} onSearch={openSearch} onFriend={openFriend} onUpdateFeed={addComment}/>;
-      case "explore": return <ScreenExplore albums={albums} onAlbum={openAlbum}/>;
+      case "explore": return <ScreenExplore albums={albums} onAlbum={openAlbum} savedList={savedList} onSave={saveToList}/>;
       case "activity": return <ScreenActivity albums={albums} onAlbum={openAlbum} onFriend={openFriend}/>;
-      case "profile": return <ScreenProfile albums={albums} onAlbum={openAlbum} onShareCard={openShare} onSettings={openSettings}/>;
+      case "profile": return <ScreenProfile albums={albums} onAlbum={openAlbum} onShareCard={openShare} onSettings={openSettings} savedList={savedList} onRemove={removeFromList}/>;
       default: return null;
     }
   };
