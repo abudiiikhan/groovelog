@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="100" fill="#0d0d0d"/>
+  <!-- Outer vinyl ring -->
+  <circle cx="256" cy="256" r="215" fill="#111111" stroke="#ff3cac" stroke-width="8"/>
+  <!-- Groove rings -->
+  <circle cx="256" cy="256" r="188" fill="none" stroke="#ff3cac" stroke-width="2.5" stroke-opacity="0.35"/>
+  <circle cx="256" cy="256" r="161" fill="none" stroke="#ff3cac" stroke-width="2.5" stroke-opacity="0.35"/>
+  <circle cx="256" cy="256" r="134" fill="none" stroke="#ff3cac" stroke-width="2.5" stroke-opacity="0.35"/>
+  <circle cx="256" cy="256" r="107" fill="none" stroke="#ff3cac" stroke-width="2.5" stroke-opacity="0.35"/>
+  <!-- Center label -->
+  <circle cx="256" cy="256" r="80" fill="#ff3cac"/>
+  <!-- G - large, optically centred -->
+  <text x="251" y="293" font-family="Arial Black,Arial" font-weight="900" font-size="96" fill="#0d0d0d" text-anchor="middle">G</text>
+  <!-- Needle arm -->
+  <line x1="400" y1="76" x2="304" y2="188" stroke="#ff3cac" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="304" cy="188" r="12" fill="#ff3cac"/>
+</svg>

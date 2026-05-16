@@ -7,6 +7,13 @@
 <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Groovelog">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ff3cac">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:-apple-system,'Helvetica Neue',Arial,sans-serif}
@@ -1925,6 +1932,15 @@ function PhoneShell({children}){
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js')
+      .then(r=>console.log('SW registered'))
+      .catch(e=>console.log('SW failed:', e));
+  });
+}
 </script>
 </body>
 </html>
