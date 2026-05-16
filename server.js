@@ -27,6 +27,14 @@ const MB_HEADERS = {
 /* ── SQLite database (stores ratings, reviews, users) ── */
 const db = new Database(path.join(__dirname, 'groovelog.db'));
 db.exec(`
+  CREATE TABLE IF NOT EXISTS art_cache (
+    key       TEXT PRIMARY KEY,
+    coverUrl  TEXT,
+    mbid      TEXT,
+    releaseMbid TEXT,
+    updated   TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS users (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     handle    TEXT UNIQUE NOT NULL,
@@ -164,8 +172,16 @@ app.get('/api/resolve', async (req, res) => {
     if (!title || !artist) return res.status(400).json({ error: 'title and artist required' });
 
     const key = `resolve:${title.toLowerCase()}:${artist.toLowerCase()}`;
+    // Check memory cache first
     const hit = cache.get(key);
     if (hit && Date.now() - hit.ts < 30 * 60 * 1000) return res.json(hit.data);
+    // Check persistent DB cache (survives server restarts)
+    const dbHit = db.prepare('SELECT * FROM art_cache WHERE key=?').get(key);
+    if (dbHit) {
+      const result = { coverUrl: dbHit.coverUrl, mbid: dbHit.mbid, releaseMbid: dbHit.releaseMbid };
+      cache.set(key, { data: result, ts: Date.now() });
+      return res.json(result);
+    }
 
     // Search MusicBrainz release-groups for best match
     const q = encodeURIComponent(`releasegroup:"${title}" AND artist:"${artist}"`);
@@ -204,6 +220,9 @@ app.get('/api/resolve', async (req, res) => {
       year:     match['first-release-date']?.slice(0, 4) || null,
     };
     cache.set(key, { data: result, ts: Date.now() });
+    // Persist to DB so future server restarts don't re-fetch
+    db.prepare(`INSERT OR REPLACE INTO art_cache (key, coverUrl, mbid, releaseMbid) VALUES (?,?,?,?)`)
+      .run(key, result.coverUrl||null, result.mbid||null, result.releaseMbid||null);
     res.json(result);
   } catch (err) {
     console.error('/api/resolve error:', err.message);
@@ -607,13 +626,63 @@ app.get('/api/artist-image', async (req, res) => {
   }
 });
 
+/* ── Pre-warm cover art cache on startup ──
+   Resolves the main albums in the background so the home screen
+   loads with art immediately after the first visit warms the cache.
+*/
+const PREWARM_ALBUMS = [
+  {title:"Blonde",              artist:"Frank Ocean"},
+  {title:"To Pimp a Butterfly", artist:"Kendrick Lamar"},
+  {title:"CTRL",                artist:"SZA"},
+  {title:"Currents",            artist:"Tame Impala"},
+  {title:"After Hours",         artist:"The Weeknd"},
+  {title:"IGOR",                artist:"Tyler, the Creator"},
+  {title:"In Rainbows",         artist:"Radiohead"},
+  {title:"Lemonade",            artist:"Beyoncé"},
+  {title:"folklore",            artist:"Taylor Swift"},
+  {title:"channel ORANGE",      artist:"Frank Ocean"},
+];
+
+async function prewarmCache() {
+  console.log('  Pre-warming cover art cache...');
+  for (const {title, artist} of PREWARM_ALBUMS) {
+    const key = `resolve:${title.toLowerCase()}:${artist.toLowerCase()}`;
+    const existing = db.prepare('SELECT key FROM art_cache WHERE key=? AND coverUrl IS NOT NULL').get(key);
+    if (existing) { console.log(`  ✓ cached: ${title}`); continue; }
+    try {
+      const q = encodeURIComponent(`releasegroup:"${title}" AND artist:"${artist}"`);
+      const data = await mbFetch(`/release-group?query=${q}&limit=3&fmt=json`);
+      const match = (data['release-groups']||[])
+        .filter(rg=>!rg['primary-type']||rg['primary-type']==='Album')
+        .sort((a,b)=>(b.score||0)-(a.score||0))[0];
+      if (!match) continue;
+      const rgData = await mbFetch(`/release?release-group=${match.id}&limit=5&fmt=json`);
+      const releases = (rgData.releases||[]).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));
+      let coverUrl = null;
+      for (const rel of releases.slice(0,3)) {
+        coverUrl = await getCoverArt(rel.id);
+        if (coverUrl) break;
+        await new Promise(r=>setTimeout(r,300));
+      }
+      db.prepare(`INSERT OR REPLACE INTO art_cache (key,coverUrl,mbid,releaseMbid) VALUES (?,?,?,?)`)
+        .run(key, coverUrl||null, match.id, releases[0]?.id||null);
+      console.log(`  ${coverUrl?'✓':'✗'} resolved: ${title}`);
+      await new Promise(r=>setTimeout(r,1100)); // respect MB rate limit
+    } catch(e) { console.log(`  ✗ failed: ${title} — ${e.message}`); }
+  }
+  console.log('  Cover art pre-warm complete.');
+}
+
 /* ── Start server ── */
 app.listen(PORT, () => {
+  // Start cache pre-warming in background (non-blocking)
+  setTimeout(prewarmCache, 2000);
   console.log(`
   ╔════════════════════════════════════════╗
   ║  Groovelog API running on port ${PORT}    ║
   ║  MusicBrainz: connected (no key needed)║
   ║  Database: groovelog.db               ║
+  ║  Cover art: pre-warming in background ║
   ╚════════════════════════════════════════╝
 
   Endpoints:
