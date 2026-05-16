@@ -200,7 +200,7 @@ const SONG_REVIEWS = [
    
    To enable: change null to 'http://localhost:3001'
    ─────────────────────────────────────────────────────────── */
-const API_BASE = 'http://localhost:3001'; // connected to local backend
+const API_BASE = 'https://groovelog-production.up.railway.app'; // connected to local backend
 
 async function api(path, opts={}) {
   if (!API_BASE) return null;
