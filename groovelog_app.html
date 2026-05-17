@@ -360,20 +360,19 @@ function AlbumArt({color,size=44,radius=6,album=null}){
     if(url||failed||!API_BASE||!album?.title||!album?.artist) return;
     if(cacheKey && _artCache[cacheKey]){ setUrl(_artCache[cacheKey]); return; }
 
-    // Use /api/resolve which searches MB by title+artist — guaranteed correct match
-    const endpoint = album.mbid
-      ? `${API_BASE}/api/cover/${album.mbid}`
-      : `${API_BASE}/api/resolve?title=${encodeURIComponent(album.title)}&artist=${encodeURIComponent(album.artist)}`;
+    // Always use /api/resolve — it handles both release-group and release MBIDs
+    // and guarantees the correct album art (no Pink Floyd for Frank Ocean!)
+    const endpoint = `${API_BASE}/api/resolve?title=${encodeURIComponent(album.title)}&artist=${encodeURIComponent(album.artist)}`;
 
     fetch(endpoint)
       .then(r=>r.ok?r.json():null)
       .then(d=>{
-        const imgUrl = d?.url || d?.coverUrl || null;
+        const imgUrl = d?.coverUrl || d?.url || null;
         if(imgUrl && cacheKey){
           _artCache[cacheKey]=imgUrl;
           setUrl(imgUrl);
         }
-        // Also store the real mbid for future track lookups
+        // Store real release MBID for track lookups
         if(d?.releaseMbid && album && !album.mbid){
           album.mbid = d.releaseMbid;
         }
@@ -901,8 +900,17 @@ function ScreenAlbum({album,albums,songsState,onBack,onSong,onRate,onRec,onFrien
     load();
   },[album.id]);
 
-  // Use live data when available, fall back to stub
-  const current = liveAlbum || album;
+  // Merge: live MB data + user's saved score/review from albums state
+  // This ensures ratings always show even for albums opened from search
+  const savedState = albums?.find(a=>
+    a.id===album.id||a.mbid===album.id||
+    a.id===album.mbid||a.mbid===album.mbid
+  );
+  const current = {
+    ...(liveAlbum||album),
+    myScore: savedState?.myScore ?? liveAlbum?.myScore ?? album.myScore ?? null,
+    myReview: savedState?.myReview ?? liveAlbum?.myReview ?? album.myReview ?? '',
+  };
   // Tracks: use live tracklist, then local songsState, then local SONGS_DATA, then empty placeholders
   const localSongs = getSongs(album.id, songsState);
   const songs = (liveAlbum?.tracklist?.length ? liveAlbum.tracklist : localSongs) || [];
@@ -1854,20 +1862,28 @@ function App(){
 
   /* 🔌 BACKEND: posts to API, always updates local state */
   const saveRating=(album,score,review)=>{
+    if(!album){ setModal(null); return; }
     const mbid=album.mbid||String(album.id);
-    postRating(mbid,'album',score,review); // fire & forget
+    postRating(mbid,'album',score,review); // fire & forget to Railway
     setAlbums(prev=>{
-      // Match on id OR mbid to catch both local and API-sourced albums
-      const updated=prev.map(a=>
-        (a.id===album.id||a.mbid===album.id||a.id===album.mbid||a.mbid===album.mbid)
-          ?{...a,myScore:score,myReview:review}:a
-      );
-      // If album wasn't in local list (came from search/artist), add it
-      const found=updated.some(a=>
-        a.id===album.id||a.mbid===album.id||a.id===album.mbid||a.mbid===album.mbid
-      );
-      if(!found) return [...updated,{...album,myScore:score,myReview:review}];
-      return updated;
+      // Try to find existing album by any id/mbid combination
+      const match=a=>
+        a.id===album.id||
+        a.mbid===album.mbid||
+        (album.mbid&&a.id===album.mbid)||
+        (album.id&&a.mbid===album.id);
+      const found=prev.some(match);
+      if(found){
+        return prev.map(a=>match(a)?{...a,myScore:score,myReview:review}:a);
+      }
+      // Album came from search/artist page — add it to the list
+      return [...prev,{
+        ...album,
+        id:album.id||album.mbid,
+        mbid:album.mbid||album.id,
+        myScore:score,
+        myReview:review
+      }];
     });
     setModal(null);
   };
@@ -1978,7 +1994,7 @@ function App(){
   return <PhoneShell outerBg={outerBg}>
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",position:"relative"}}>
       {renderScreen()}
-      {modal?.type==="rate"&&<ModalRating album={modal.album} onClose={()=>setModal(null)} onSave={(s,r)=>saveRating(modal.album,s,r)}/>}
+      {modal?.type==="rate"&&<ModalRating album={currentAlbum||modal.album} onClose={()=>setModal(null)} onSave={(s,r)=>saveRating(currentAlbum||modal.album,s,r)}/>}
       {modal?.type==="rec"&&<ModalRecommend album={modal.album} onClose={()=>setModal(null)}/>}
       {modal?.type==="share"&&<ModalShareCard albums={albums} onClose={()=>setModal(null)}/>}
     </div>
