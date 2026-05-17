@@ -9,6 +9,55 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
+<script>
+// Generate PNG icon via canvas for iOS home screen
+window.addEventListener('load',function(){
+  try{
+    var c=document.createElement('canvas');
+    c.width=180;c.height=180;
+    var ctx=c.getContext('2d');
+    // Background
+    ctx.fillStyle='#0d0d0d';
+    roundRect(ctx,0,0,180,180,35);
+    ctx.fill();
+    // Vinyl outer
+    ctx.beginPath();ctx.arc(90,90,76,0,Math.PI*2);
+    ctx.fillStyle='#111111';ctx.fill();
+    ctx.strokeStyle='#ff3cac';ctx.lineWidth=3;ctx.stroke();
+    // Groove rings
+    [66,56,46,36].forEach(function(r){
+      ctx.beginPath();ctx.arc(90,90,r,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,60,172,0.35)';ctx.lineWidth=1;ctx.stroke();
+    });
+    // Center label
+    ctx.beginPath();ctx.arc(90,90,28,0,Math.PI*2);
+    ctx.fillStyle='#ff3cac';ctx.fill();
+    // G text
+    ctx.fillStyle='#0d0d0d';
+    ctx.font='900 34px "Arial Black",Arial';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('G',88,92);
+    // Needle
+    ctx.beginPath();ctx.moveTo(141,27);ctx.lineTo(107,66);
+    ctx.strokeStyle='#ff3cac';ctx.lineWidth=3;
+    ctx.lineCap='round';ctx.stroke();
+    ctx.beginPath();ctx.arc(107,66,4.5,0,Math.PI*2);
+    ctx.fillStyle='#ff3cac';ctx.fill();
+    // Set as apple touch icon
+    var link=document.querySelector("link[rel='apple-touch-icon']");
+    if(link) link.href=c.toDataURL('image/png');
+  } catch(e){}
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+  }
+});
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Groovelog">
@@ -1515,10 +1564,12 @@ function ScreenArtist({artistMbid,artistName,onBack,onAlbum}){
           No {tab.toLowerCase()} found
         </div>}
       {!loading&&currentList.map((a,i)=>{
+        const artistNameResolved=artistName||data?.name;
         const obj={id:a.mbid,mbid:a.mbid,title:a.title,
-          artist:artistName||data?.name,year:a.year,
-          color:colorFor(a.mbid),coverUrl:null,avg:null,
-          myScore:null,myReview:"",ratings:0,tracks:a.tracks||0};
+          artist:artistNameResolved,year:a.year,
+          color:colorFor(a.mbid),
+          // No coverUrl — AlbumArt will fetch via /api/resolve using title+artist
+          avg:null,myScore:null,myReview:"",ratings:0,tracks:a.tracks||0};
         return <div key={i} onClick={()=>onAlbum(obj)}
           style={{display:"flex",alignItems:"center",gap:11,padding:"9px 0",
             borderBottom:`0.5px solid ${C.border}`,cursor:"pointer"}}>
@@ -1805,7 +1856,19 @@ function App(){
   const saveRating=(album,score,review)=>{
     const mbid=album.mbid||String(album.id);
     postRating(mbid,'album',score,review); // fire & forget
-    setAlbums(prev=>prev.map(a=>a.id===album.id?{...a,myScore:score,myReview:review}:a));
+    setAlbums(prev=>{
+      // Match on id OR mbid to catch both local and API-sourced albums
+      const updated=prev.map(a=>
+        (a.id===album.id||a.mbid===album.id||a.id===album.mbid||a.mbid===album.mbid)
+          ?{...a,myScore:score,myReview:review}:a
+      );
+      // If album wasn't in local list (came from search/artist), add it
+      const found=updated.some(a=>
+        a.id===album.id||a.mbid===album.id||a.id===album.mbid||a.mbid===album.mbid
+      );
+      if(!found) return [...updated,{...album,myScore:score,myReview:review}];
+      return updated;
+    });
     setModal(null);
   };
 
@@ -1859,7 +1922,14 @@ function App(){
     {onboardStep===0?<ScreenWelcome onNext={()=>setOnboardStep(1)}/>:<ScreenSeedTaste onDone={()=>setOnboarded(true)}/>}
   </PhoneShell>;
 
-  const currentAlbum=top?.screen==="album"?(albums.find(a=>a.id===top.props.album.id)||top.props.album):null;
+  const currentAlbum=top?.screen==="album"
+    ?(albums.find(a=>
+        a.id===top.props.album.id||
+        a.mbid===top.props.album.id||
+        a.id===top.props.album.mbid||
+        a.mbid===top.props.album.mbid
+      )||top.props.album)
+    :null;
 
   const renderScreen=()=>{
     if(top) switch(top.screen){
